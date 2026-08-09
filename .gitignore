@@ -1,0 +1,20 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.env
+# Virtual environments
+.venv
+
+
+#editors 
+.vscode/**
+
+*.code-workspace
+
+
+# personal idea
+roadmap.md
