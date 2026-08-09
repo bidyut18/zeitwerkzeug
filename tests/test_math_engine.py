@@ -12,17 +12,17 @@ def test_solar_noon_greenwich_is_near_midday_utc(
     assert noon_utc.hour in {11, 12, 13}
 
 
-def test_sunrise_in_delhi_is_in_early_morning_local_time(
-    delhi,
+def test_sunrise_in_osaka_is_in_early_morning_local_time(
+    osaka_japan,
     summer_solstice_2026,
 ) -> None:
     sunrise_utc = engine.event_utc_datetime(
         summer_solstice_2026,
-        delhi,
+        osaka_japan,
         altitude=-0.833,
         rising=True,
     )
-    sunrise_local = sunrise_utc.astimezone(delhi.tzinfo)
+    sunrise_local = sunrise_utc.astimezone(osaka_japan.tzinfo)
     assert 4 <= sunrise_local.hour <= 6
 
 

@@ -71,9 +71,9 @@ def greenwich() -> Location:
 
 
 @pytest.fixture
-def delhi() -> Location:
-    """New Delhi, India (Asia/Kolkata)."""
-    return Location(lat=28.6139, lon=77.2090, timezone="Asia/Kolkata")
+def osaka_japan() -> Location:
+    """Osaka Japan timezone."""
+    return Location(lat=34.6937, lon=135.5020, timezone="Asia/Tokyo")
 
 
 @pytest.fixture

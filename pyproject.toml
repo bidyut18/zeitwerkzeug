@@ -12,34 +12,17 @@ authors = [{ name = "Bidyut Mahanta", email = "bidyutmahanta7768@outlook.com" }]
 
 dependencies = ["tzdata>=2024.1; sys_platform == 'win32'"]
 
-keywords = [
-    "time",
-    "sunrise",
-    "sunset",
-    "scheduler",
-    "cron",
-    "astro",
-    "context",
-    "personas",
-    "async",
-]
+keywords = ["time", "scheduler", "timezone"]
 classifiers = [
-    "Development Status :: 4 - Alpha",
-    "Intended Audience :: Developers",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Development Status :: Alpha",
     "Topic :: Scientific/Engineering :: Astronomy",
-    "Typing :: Typed",
+
 ]
 
 [project.urls]
-Homepage = "https://github.com/bidyutmahanta/zeitwerkzeug"
-Repository = "https://github.com/bidyutmahanta/zeitwerkzeug"
-Issues = "https://github.com/bidyutmahanta/zeitwerkzeug/issues"
+Homepage = "https://github.com/bidyut18/zeitwerkzeug"
+Repository = "https://github.com/bidyut18/zeitwerkzeug"
+Issues = "https://github.com/bidyut18/zeitwerkzeug/issues"
 
 
 [project.optional-dependencies]
@@ -49,7 +32,7 @@ weather = ["httpx>=0.27"]
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
-# Local development dependencies (PEP 735 - Used by `uv` and modern pip)
+
 [dependency-groups]
 dev = [
     "pytest>=8.2",
@@ -61,7 +44,6 @@ dev = [
     "pre-commit>=3.7",
 ]
 
-# --- Tool Configurations ---
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -69,7 +51,6 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-
 asyncio_mode = "auto"
 addopts = "-ra --strict-markers"
 
@@ -83,7 +64,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "ASYNC"]
 ignore = ["D"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.14"
 strict = true
 warn_unused_ignores = true
 warn_redundant_casts = true
