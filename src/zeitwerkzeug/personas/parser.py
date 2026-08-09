@@ -59,7 +59,6 @@ class PersonaParser:
         awake = self.profile.awake_block(reference)
         wake = awake.start
         sleep = awake.end
-        duration = awake.duration
 
         if "first thing" in phrase and "morning" in phrase:
             return TimeBlock(
@@ -68,7 +67,7 @@ class PersonaParser:
                 label="first_thing_in_the_morning",
             )
 
-        if phrase == "morning" or "morning" in phrase and "late" not in phrase:
+        if phrase == "morning" or ("morning" in phrase and "late" not in phrase):
             return TimeBlock(
                 start=wake + timedelta(hours=1),
                 end=wake + timedelta(hours=4),

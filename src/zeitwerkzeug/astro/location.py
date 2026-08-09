@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, timezone
+from datetime import UTC
+from datetime import timezone as _datetime_timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from zeitwerkzeug.exceptions import LocationError
 
 
-def _resolve_tzinfo(name: str) -> ZoneInfo | timezone:
-    if name in {"UTC", "Etc/UTC", "Etc/GMT"}:
+def _resolve_tzinfo(name: str) -> ZoneInfo | _datetime_timezone:
+    if name == "UTC" or name in {"Etc/UTC", "Etc/GMT"}:
         return UTC
     return ZoneInfo(name)
 
@@ -48,7 +49,7 @@ class Location:
             raise LocationError(f"Invalid timezone: {self.timezone!r}") from exc
 
     @property
-    def tzinfo(self) -> ZoneInfo | timezone:
+    def tzinfo(self) -> ZoneInfo | _datetime_timezone:
         """Return the resolved timezone object."""
         return self._tzinfo
 

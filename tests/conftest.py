@@ -5,9 +5,55 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import UTC, date, datetime, time
 
+import httpx
 import pytest
 
-from zeitwerkzeug import FuzzyCron, Location, PersonaParser, StandardWorker, schedule
+from zeitwerkzeug import (
+    ClearWeather,
+    ExecutionContext,
+    FuzzyCron,
+    Location,
+    PersonaParser,
+    StandardWorker,
+    schedule,
+)
+from zeitwerkzeug.integrations.rate_limit import OpenMeteoRateLimiter
+
+# ----------------------------------------------------------------------
+# httpx shims — capture the real class BEFORE any monkeypatching happens
+# ----------------------------------------------------------------------
+_RealAsyncClient = httpx.AsyncClient
+
+
+def _make_fake_async_client(payload: dict):
+    """Return a factory that creates a fake httpx.AsyncClient."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status_code=200, json=payload)
+
+    def fake_async_client(*args, **kwargs):
+        kwargs["transport"] = httpx.MockTransport(handler)
+        return _RealAsyncClient(*args, **kwargs)
+
+    return fake_async_client
+
+
+def _make_fake_error_async_client(status_code: int = 500):
+    """Return a factory that creates a fake httpx.AsyncClient that errors."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status_code=status_code)
+
+    def fake_async_client(*args, **kwargs):
+        kwargs["transport"] = httpx.MockTransport(handler)
+        return _RealAsyncClient(*args, **kwargs)
+
+    return fake_async_client
+
+
+# ----------------------------------------------------------------------
+# Simple callables
+# ----------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -20,6 +66,10 @@ def noop_job() -> Callable[[], None]:
     return _job
 
 
+# ----------------------------------------------------------------------
+# Scheduler / registry
+# ----------------------------------------------------------------------
+
 
 @pytest.fixture
 def fuzzy_cron() -> FuzzyCron:
@@ -31,6 +81,11 @@ def fuzzy_cron() -> FuzzyCron:
 def utc_noon_trigger():
     """Return a daily-at-12:00-UTC trigger."""
     return schedule.at(time(12, 0), tz="UTC")
+
+
+# ----------------------------------------------------------------------
+# Dates & datetimes
+# ----------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -63,6 +118,10 @@ def utc_afternoon() -> datetime:
     return datetime(2026, 8, 9, 13, 0, tzinfo=UTC)
 
 
+# ----------------------------------------------------------------------
+# Locations
+# ----------------------------------------------------------------------
+
 
 @pytest.fixture
 def greenwich() -> Location:
@@ -72,7 +131,7 @@ def greenwich() -> Location:
 
 @pytest.fixture
 def osaka_japan() -> Location:
-    """Osaka Japan timezone."""
+    """Osaka, Japan (Asia/Tokyo)."""
     return Location(lat=34.6937, lon=135.5020, timezone="Asia/Tokyo")
 
 
@@ -81,6 +140,10 @@ def polar_location() -> Location:
     """High Arctic — useful for polar-night / midnight-sun tests."""
     return Location(lat=80.0, lon=0.0, timezone="UTC")
 
+
+# ----------------------------------------------------------------------
+# Personas
+# ----------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -95,6 +158,28 @@ def utc_parser(utc_worker: StandardWorker) -> PersonaParser:
     return PersonaParser(utc_worker)
 
 
+# ----------------------------------------------------------------------
+# Execution context
+# ----------------------------------------------------------------------
+
+
+@pytest.fixture
+def execution_context() -> ExecutionContext:
+    """Return a minimal execution context for condition testing."""
+    now = datetime.now(UTC)
+    return ExecutionContext(
+        job_name="test-job",
+        scheduled_for=now,
+        triggered_at=now,
+        attempt=1,
+    )
+
+
+# ----------------------------------------------------------------------
+# Conditions
+# ----------------------------------------------------------------------
+
+
 class _AlwaysTrueCondition:
     """A condition plugin that always evaluates to True."""
 
@@ -106,3 +191,73 @@ class _AlwaysTrueCondition:
 def true_condition():
     """Return a condition instance that always passes."""
     return _AlwaysTrueCondition()
+
+
+# ----------------------------------------------------------------------
+# Rate limiter
+# ----------------------------------------------------------------------
+
+
+@pytest.fixture
+def rate_limiter() -> OpenMeteoRateLimiter:
+    """Return a rate limiter with a tight per-minute cap for unit tests."""
+    return OpenMeteoRateLimiter(
+        max_per_minute=2,
+        max_per_hour=10,
+        max_per_day=100,
+    )
+
+
+@pytest.fixture
+def strict_daily_limiter() -> OpenMeteoRateLimiter:
+    """Return a rate limiter with a tight per-day cap for unit tests."""
+    return OpenMeteoRateLimiter(
+        max_per_minute=100,
+        max_per_hour=100,
+        max_per_day=2,
+    )
+
+
+# ----------------------------------------------------------------------
+# Weather
+# ----------------------------------------------------------------------
+
+
+@pytest.fixture
+def clear_weather_osaka() -> ClearWeather:
+    """Return a ClearWeather instance for Osaka with the rate limiter disabled."""
+    condition = ClearWeather(
+        lat=34.6937,
+        lon=135.5020,
+        max_cloud_cover=20,
+    )
+    condition.limiter = None
+    return condition
+
+
+@pytest.fixture
+def fake_weather_client_factory():
+    """Return a factory for fake Open-Meteo HTTP clients.
+
+    Usage in a test::
+
+        monkeypatch.setattr(
+            "zeitwerkzeug.integrations.weather.httpx.AsyncClient",
+            fake_weather_client_factory({"current_weather": {"cloudcover": 10}}),
+        )
+    """
+    return _make_fake_async_client
+
+
+@pytest.fixture
+def fake_weather_error_client_factory():
+    """Return a factory for fake Open-Meteo HTTP clients that return errors.
+
+    Usage in a test::
+
+        monkeypatch.setattr(
+            "zeitwerkzeug.integrations.weather.httpx.AsyncClient",
+            fake_weather_error_client_factory(500),
+        )
+    """
+    return _make_fake_error_async_client

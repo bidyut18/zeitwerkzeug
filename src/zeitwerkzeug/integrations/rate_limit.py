@@ -67,12 +67,11 @@ class OpenMeteoRateLimiter:
                 )
                 return False
 
-            # Record the call
+            
             self._minute_calls.append(now)
             self._hour_calls.append(now)
             self._day_calls.append(now)
             return True
 
 
-# Global singleton used by all free-tier ClearWeather instances
 FREE_API_LIMITER = OpenMeteoRateLimiter()

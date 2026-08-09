@@ -6,8 +6,11 @@ import asyncio
 import heapq
 import inspect
 import logging
+import random
 import uuid
+from collections import deque
 from contextlib import suppress
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import NamedTuple
 
@@ -15,14 +18,25 @@ from zeitwerkzeug.daemon.cron import FuzzyCron, JobSpec
 from zeitwerkzeug.exceptions import ConditionEvaluationError, ZeitwerkzeugError
 from zeitwerkzeug.interfaces import ConditionPlugin, ExecutionContext
 
-logger = logging.getLogger("zeitwerkzeug.daemon")
+logger = logging.getLogger(__name__)
 
-# ----------------------------------------------------------------------
+
+# --------------------------------------------------------------------
 # Timing constants
-# ----------------------------------------------------------------------
+# --------------------------------------------------------------------
+
 _MAX_WAIT_SECONDS = 300.0
 _EMPTY_QUEUE_SLEEP_SECONDS = 30
 _MIDNIGHT_LOOP_SLEEP_MINUTES = 5
+_SEMAPHORE_POLL_SECONDS = 1.0
+
+
+def _ensure_utc(dt: datetime) -> datetime:
+    """Return a timezone-aware UTC datetime."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+
+    return dt.astimezone(UTC)
 
 
 class SystemClock:
@@ -32,11 +46,29 @@ class SystemClock:
         return datetime.now(UTC)
 
 
+@dataclass(frozen=True, slots=True)
+class ExecutionRecord:
+    """A single historical execution result."""
+
+    job_id: uuid.UUID
+    job_name: str
+    scheduled_for: datetime
+    started_at: datetime
+    finished_at: datetime
+    attempt: int
+    status: str
+    error: str | None = None
+
+    @property
+    def duration(self) -> timedelta:
+        """Total time spent evaluating and executing."""
+        return self.finished_at - self.started_at
+
+
 class QueueEntry(NamedTuple):
     """A single item in the execution heap.
 
-    Fields are ordered so that heap comparison (datetime first, then
-    generation) matches the original tuple layout exactly.
+    Fields are ordered so that heap comparison works correctly.
     """
 
     when: datetime
@@ -49,11 +81,15 @@ class ExecutionLoop:
     """Async scheduler designed for moving targets.
 
     Features:
-    - resolves trigger times lazily
-    - supports condition plugins
-    - supports retry policies
-    - recalculates jobs at local midnight per job timezone
-    - safe for sync and async job functions
+        - resolves trigger times lazily
+        - supports condition plugins
+        - supports retry policies
+        - recalculates jobs at local midnight per job timezone
+        - safe for sync and async job functions
+        - supports concurrent job execution
+        - supports condition and job timeouts
+        - supports missed-run skipping
+        - keeps in-memory execution history
     """
 
     def __init__(
@@ -62,10 +98,28 @@ class ExecutionLoop:
         *,
         clock: SystemClock | None = None,
         midnight_recalibration: bool = True,
+        max_concurrency: int = 32,
+        default_job_timeout: timedelta | None = timedelta(minutes=5),
+        default_condition_timeout: timedelta | None = timedelta(seconds=30),
+        default_max_latency: timedelta | None = None,
+        retry_jitter_seconds: float = 0.0,
+        history_limit: int = 1000,
     ) -> None:
+        if max_concurrency < 1:
+            raise ValueError("max_concurrency must be at least 1.")
+
+        if history_limit < 0:
+            raise ValueError("history_limit must be zero or greater.")
+
         self.registry = registry or FuzzyCron.default()
         self.clock = clock or SystemClock()
         self.midnight_recalibration = midnight_recalibration
+
+        self.max_concurrency = max_concurrency
+        self.default_job_timeout = default_job_timeout
+        self.default_condition_timeout = default_condition_timeout
+        self.default_max_latency = default_max_latency
+        self.retry_jitter_seconds = retry_jitter_seconds
 
         self._queue: list[QueueEntry] = []
         self._generations: dict[uuid.UUID, int] = {}
@@ -76,23 +130,53 @@ class ExecutionLoop:
         self._wake = asyncio.Event()
         self._until: datetime | None = None
 
+        self._semaphore = asyncio.Semaphore(max_concurrency)
+        self._inflight: set[asyncio.Task[None]] = set()
+        self._history: deque[ExecutionRecord] = deque(maxlen=history_limit)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
     def stop(self) -> None:
         """Request graceful shutdown."""
         self._running = False
         self._wake.set()
 
+    @property
+    def history(self) -> tuple[ExecutionRecord, ...]:
+        """Return execution history, newest last."""
+        return tuple(self._history)
+
+    def stats(self) -> dict[str, int | bool]:
+        """Return basic operational metrics."""
+        return {
+            "running": self._running,
+            "queue_depth": len(self._queue),
+            "active_jobs": len(self._active),
+            "inflight_jobs": len(self._inflight),
+            "history_size": len(self._history),
+            "max_concurrency": self.max_concurrency,
+        }
+
     async def run(self, *, until: datetime | None = None) -> None:
         """Run the daemon until stopped or until an optional deadline."""
         self._running = True
-        self._until = until
+        self._until = _ensure_utc(until) if until is not None else None
 
         self._populate_all(self.clock.now())
 
-        async with asyncio.TaskGroup() as tg:
-            tg.create_task(self._queue_loop())
+        try:
+            async with asyncio.TaskGroup() as tg:
+                tg.create_task(self._queue_loop())
 
-            if self.midnight_recalibration:
-                tg.create_task(self._midnight_loop())
+                if self.midnight_recalibration:
+                    tg.create_task(self._midnight_loop())
+        finally:
+            if self._inflight:
+                await asyncio.gather(*self._inflight, return_exceptions=True)
+
+            self._running = False
 
     # ------------------------------------------------------------------
     # Job registry management
@@ -124,9 +208,11 @@ class ExecutionLoop:
     def _refresh_job(self, job: JobSpec, now: datetime) -> None:
         """Bump a job's generation and schedule its next occurrence."""
         generation = self._generations.get(job.id, 0) + 1
+
         self._generations[job.id] = generation
         self._active.add(job.id)
         self._last_refresh[job.id] = self._local_date(job, now)
+
         self._schedule_next(job, after=now, attempt=1, generation=generation)
 
     def _local_date(self, job: JobSpec, now: datetime) -> date:
@@ -169,7 +255,8 @@ class ExecutionLoop:
 
         if policy.max_attempts is not None and attempt >= policy.max_attempts:
             logger.info(
-                "Job %s reached max attempts; scheduling next occurrence.", job.name
+                "Job %s reached max attempts; scheduling next occurrence.",
+                job.name,
             )
             self._schedule_next(job, now, attempt=1, generation=generation)
             return
@@ -181,9 +268,14 @@ class ExecutionLoop:
 
         next_retry = now + policy.retry_interval
 
+        if self.retry_jitter_seconds > 0:
+            jitter = random.uniform(0.0, self.retry_jitter_seconds)
+            next_retry += timedelta(seconds=jitter)
+
         if limit_utc is not None and next_retry > limit_utc:
             logger.info(
-                "Job %s retry limit reached; scheduling next occurrence.", job.name
+                "Job %s retry limit reached; scheduling next occurrence.",
+                job.name,
             )
             self._schedule_next(job, now, attempt=1, generation=generation)
             return
@@ -198,13 +290,16 @@ class ExecutionLoop:
         generation: int,
     ) -> None:
         """Insert an entry into the priority queue and wake the loop."""
-        heapq.heappush(self._queue, QueueEntry(when, generation, job_id, attempt))
+        heapq.heappush(
+            self._queue,
+            QueueEntry(_ensure_utc(when), generation, job_id, attempt),
+        )
         self._wake.set()
 
     def _peek_valid(self) -> QueueEntry | None:
         """Return the earliest queue entry whose generation is still current.
 
-        Stale entries (removed jobs or superseded generations) are discarded.
+        Stale entries are discarded.
         """
         while self._queue:
             entry = self._queue[0]
@@ -239,15 +334,31 @@ class ExecutionLoop:
                 )
                 continue
 
-            when = entry.when
             now = self.clock.now()
 
-            if when > now:
-                await self._wait_until(when)
+            if entry.when > now:
+                await self._wait_until(entry.when)
+                continue
+
+            acquired = await self._acquire_concurrency_slot()
+
+            if not acquired:
+                continue
+
+            # Re-check after acquiring the slot because the queue may have
+            # changed while waiting for concurrency capacity.
+            entry = self._peek_valid()
+            now = self.clock.now()
+
+            if entry is None or entry.when > now:
+                self._semaphore.release()
                 continue
 
             heapq.heappop(self._queue)
-            await self._execute(entry.job_id, when, entry.attempt)
+
+            task = asyncio.create_task(self._execute_entry(entry))
+            self._inflight.add(task)
+            task.add_done_callback(self._inflight.discard)
 
     async def _midnight_loop(self) -> None:
         """Recalibrate job schedules at local midnight for each timezone."""
@@ -270,11 +381,7 @@ class ExecutionLoop:
             self._refresh_due_jobs(self.clock.now())
 
     def _next_refresh_time(self, now: datetime) -> datetime | None:
-        """Return the earliest local midnight at which a refresh is due.
-
-        If any job has not yet been refreshed for its current local day,
-        ``now`` is returned so the refresh happens immediately.
-        """
+        """Return the earliest local midnight at which a refresh is due."""
         candidates: list[datetime] = []
 
         for job in self.registry.jobs:
@@ -289,6 +396,7 @@ class ExecutionLoop:
                 time.min,
                 tzinfo=tzinfo,
             )
+
             candidates.append(next_midnight_local.astimezone(UTC))
 
         return min(candidates) if candidates else None
@@ -306,6 +414,27 @@ class ExecutionLoop:
     # Execution
     # ------------------------------------------------------------------
 
+    async def _acquire_concurrency_slot(self) -> bool:
+        """Acquire a concurrency slot while still respecting stop()."""
+        while self._running:
+            try:
+                await asyncio.wait_for(
+                    self._semaphore.acquire(),
+                    timeout=_SEMAPHORE_POLL_SECONDS,
+                )
+                return True
+            except TimeoutError:
+                continue
+
+        return False
+
+    async def _execute_entry(self, entry: QueueEntry) -> None:
+        """Execute one queue entry and always release the concurrency slot."""
+        try:
+            await self._execute(entry.job_id, entry.when, entry.attempt)
+        finally:
+            self._semaphore.release()
+
     async def _execute(
         self,
         job_id: uuid.UUID,
@@ -314,10 +443,45 @@ class ExecutionLoop:
     ) -> None:
         """Evaluate conditions and run a single job occurrence."""
         job = self.registry.get_job(job_id)
+
         if job is None:
             return
 
         now = self.clock.now()
+
+        # Missed-run protection.
+        max_latency = (
+            job.max_latency
+            if job.max_latency is not None
+            else self.default_max_latency
+        )
+
+        if max_latency is not None and now - scheduled_for > max_latency:
+            finished_at = self.clock.now()
+
+            self._record(
+                job=job,
+                scheduled_for=scheduled_for,
+                started_at=now,
+                finished_at=finished_at,
+                attempt=attempt,
+                status="skipped",
+                error="missed_run",
+            )
+
+            logger.warning(
+                "Job %s missed its run by %s; skipping.",
+                job.name,
+                now - scheduled_for,
+            )
+
+            self._schedule_next(
+                job,
+                after=now,
+                attempt=1,
+                generation=self._generations.get(job.id, 1),
+            )
+            return
 
         context = ExecutionContext(
             job_name=job.name,
@@ -328,29 +492,125 @@ class ExecutionLoop:
             metadata={"tags": tuple(job.tags)},
         )
 
+        started_at = self.clock.now()
+
+        condition_timeout = (
+            job.condition_timeout
+            if job.condition_timeout is not None
+            else self.default_condition_timeout
+        )
+
+        conditions_ok = False
+        condition_status = "condition_failed"
+        condition_error: str | None = None
+
         try:
-            conditions_ok = await self._evaluate_conditions(
-                job.trigger.conditions, context
-            )
-        except ConditionEvaluationError:
+            if condition_timeout is not None:
+                conditions_ok = await asyncio.wait_for(
+                    self._evaluate_conditions(job.trigger.conditions, context),
+                    timeout=condition_timeout.total_seconds(),
+                )
+            else:
+                conditions_ok = await self._evaluate_conditions(
+                    job.trigger.conditions,
+                    context,
+                )
+
+            condition_status = "conditions_passed" if conditions_ok else "condition_failed"
+
+        except ConditionEvaluationError as exc:
+            condition_status = "condition_error"
+            condition_error = str(exc)
             logger.exception("Condition evaluation failed for job %s", job.name)
-            conditions_ok = False
 
-        if conditions_ok:
-            try:
+        except TimeoutError:
+            condition_status = "condition_timeout"
+            condition_error = "condition evaluation timed out"
+            logger.warning(
+                "Condition evaluation timed out for job %s after %s",
+                job.name,
+                condition_timeout,
+            )
+
+        if not conditions_ok:
+            finished_at = self.clock.now()
+
+            self._record(
+                job=job,
+                scheduled_for=scheduled_for,
+                started_at=started_at,
+                finished_at=finished_at,
+                attempt=attempt,
+                status=condition_status,
+                error=condition_error,
+            )
+
+            self._schedule_retry(job, self.clock.now(), attempt)
+            return
+
+        job_timeout = (
+            job.job_timeout
+            if job.job_timeout is not None
+            else self.default_job_timeout
+        )
+
+        status = "success"
+        error: str | None = None
+
+        try:
+            if job_timeout is not None:
+                await asyncio.wait_for(
+                    self._call_job(job, context),
+                    timeout=job_timeout.total_seconds(),
+                )
+            else:
                 await self._call_job(job, context)
-            except Exception:
-                logger.exception("Job %s raised during execution", job.name)
 
+        except TimeoutError:
+            status = "timeout"
+            error = "job timed out"
+            logger.error(
+                "Job %s timed out after %s",
+                job.name,
+                job_timeout,
+            )
+
+        except Exception as exc:
+            status = "error"
+            error = repr(exc)
+            logger.exception("Job %s raised during execution", job.name)
+
+        finished_at = self.clock.now()
+
+        self._record(
+            job=job,
+            scheduled_for=scheduled_for,
+            started_at=started_at,
+            finished_at=finished_at,
+            attempt=attempt,
+            status=status,
+            error=error,
+        )
+
+        if status == "success":
             self._schedule_next(
                 job,
-                after=self.clock.now(),
+                after=finished_at,
                 attempt=1,
                 generation=self._generations.get(job.id, 1),
             )
         else:
-            logger.info("Conditions failed for job %s", job.name)
-            self._schedule_retry(job, now, attempt)
+            # If the trigger has a fail policy, allow failed job executions
+            # to retry using the same policy used for failed conditions.
+            if job.trigger.fail_policy is not None:
+                self._schedule_retry(job, finished_at, attempt)
+            else:
+                self._schedule_next(
+                    job,
+                    after=finished_at,
+                    attempt=1,
+                    generation=self._generations.get(job.id, 1),
+                )
 
     async def _evaluate_conditions(
         self,
@@ -385,6 +645,52 @@ class ExecutionLoop:
             await asyncio.to_thread(job.func, *args, **job.kwargs)
 
     # ------------------------------------------------------------------
+    # History / observability
+    # ------------------------------------------------------------------
+
+    def _record(
+        self,
+        *,
+        job: JobSpec,
+        scheduled_for: datetime,
+        started_at: datetime,
+        finished_at: datetime,
+        attempt: int,
+        status: str,
+        error: str | None,
+    ) -> None:
+        """Record an execution result in history and emit a log event."""
+        record = ExecutionRecord(
+            job_id=job.id,
+            job_name=job.name,
+            scheduled_for=scheduled_for,
+            started_at=started_at,
+            finished_at=finished_at,
+            attempt=attempt,
+            status=status,
+            error=error,
+        )
+
+        self._history.append(record)
+
+        if status == "success":
+            logger.info(
+                "job.success name=%s scheduled_for=%s attempt=%s",
+                job.name,
+                scheduled_for,
+                attempt,
+            )
+        else:
+            logger.warning(
+                "job.%s name=%s scheduled_for=%s attempt=%s error=%s",
+                status,
+                job.name,
+                scheduled_for,
+                attempt,
+                error,
+            )
+
+    # ------------------------------------------------------------------
     # Sleeping / waiting utilities
     # ------------------------------------------------------------------
 
@@ -392,11 +698,13 @@ class ExecutionLoop:
         """Sleep until *when*, waking early if the loop is signalled."""
         while self._running:
             delta = (when - self.clock.now()).total_seconds()
+
             if delta <= 0:
                 return
 
             self._wake.clear()
-            with suppress(asyncio.TimeoutError):
+
+            with suppress(TimeoutError):
                 await asyncio.wait_for(
                     self._wake.wait(),
                     timeout=min(delta, _MAX_WAIT_SECONDS),
@@ -404,8 +712,12 @@ class ExecutionLoop:
 
     async def _sleep_with_wake(self, interval: timedelta) -> None:
         """Sleep for *interval* unless the loop is signalled earlier."""
+        if interval.total_seconds() <= 0:
+            return
+
         self._wake.clear()
-        with suppress(asyncio.TimeoutError):
+
+        with suppress(TimeoutError):
             await asyncio.wait_for(
                 self._wake.wait(),
                 timeout=interval.total_seconds(),
