@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class OpenMeteoRateLimiter:
     """
     Enforces Open-Meteo free tier limits with a built-in safety margin.
-    
+
     Open-Meteo Hard Limits: 600/min, 5000/hr, 10000/day.
     Our Library Hard Caps:  500/min, 4500/hr, 9000/day.
     """
@@ -67,7 +67,6 @@ class OpenMeteoRateLimiter:
                 )
                 return False
 
-            
             self._minute_calls.append(now)
             self._hour_calls.append(now)
             self._day_calls.append(now)

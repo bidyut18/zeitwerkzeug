@@ -31,7 +31,7 @@ class ClearWeather:
             # Commercial endpoint has practically unlimited quotas
             self.endpoint = "https://customer-api.open-meteo.com/v1/forecast"
             self.api_key = api_key
-            self.limiter = None 
+            self.limiter = None
         else:
             # Free endpoint requires strict rate limiting
             self.endpoint = "https://api.open-meteo.com/v1/forecast"
@@ -71,7 +71,5 @@ class ClearWeather:
                 return cloud_cover <= self.max_cloud_cover
 
             except httpx.HTTPError:
-                logger.warning(
-                    "Weather API request failed for job=%s", context.job_name
-                )
+                logger.warning("Weather API request failed for job=%s", context.job_name)
                 return False

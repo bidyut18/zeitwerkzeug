@@ -329,9 +329,7 @@ class ExecutionLoop:
             entry = self._peek_valid()
 
             if entry is None:
-                await self._sleep_with_wake(
-                    timedelta(seconds=_EMPTY_QUEUE_SLEEP_SECONDS)
-                )
+                await self._sleep_with_wake(timedelta(seconds=_EMPTY_QUEUE_SLEEP_SECONDS))
                 continue
 
             now = self.clock.now()
@@ -367,9 +365,7 @@ class ExecutionLoop:
             next_refresh = self._next_refresh_time(now)
 
             if next_refresh is None:
-                await self._sleep_with_wake(
-                    timedelta(minutes=_MIDNIGHT_LOOP_SLEEP_MINUTES)
-                )
+                await self._sleep_with_wake(timedelta(minutes=_MIDNIGHT_LOOP_SLEEP_MINUTES))
                 continue
 
             if next_refresh > now:
@@ -450,11 +446,7 @@ class ExecutionLoop:
         now = self.clock.now()
 
         # Missed-run protection.
-        max_latency = (
-            job.max_latency
-            if job.max_latency is not None
-            else self.default_max_latency
-        )
+        max_latency = job.max_latency if job.max_latency is not None else self.default_max_latency
 
         if max_latency is not None and now - scheduled_for > max_latency:
             finished_at = self.clock.now()
@@ -548,11 +540,7 @@ class ExecutionLoop:
             self._schedule_retry(job, self.clock.now(), attempt)
             return
 
-        job_timeout = (
-            job.job_timeout
-            if job.job_timeout is not None
-            else self.default_job_timeout
-        )
+        job_timeout = job.job_timeout if job.job_timeout is not None else self.default_job_timeout
 
         status = "success"
         error: str | None = None
@@ -629,9 +617,7 @@ class ExecutionLoop:
                     return False
 
             except Exception as exc:
-                raise ConditionEvaluationError(
-                    f"Condition failed: {condition!r}"
-                ) from exc
+                raise ConditionEvaluationError(f"Condition failed: {condition!r}") from exc
 
         return True
 

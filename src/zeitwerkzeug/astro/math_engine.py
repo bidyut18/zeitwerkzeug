@@ -94,8 +94,7 @@ def solar_geometry(dt_utc: datetime) -> SunGeometry:
     apparent_longitude = true_longitude - 0.00569 - 0.00478 * sin(omega_rad)
 
     mean_obliquity = (
-        23.0
-        + (26.0 + (21.448 - t * (46.8150 + t * (0.00059 - t * 0.001813))) / 60.0) / 60.0
+        23.0 + (26.0 + (21.448 - t * (46.8150 + t * (0.00059 - t * 0.001813))) / 60.0) / 60.0
     )
 
     obliquity = mean_obliquity + 0.00256 * cos(omega_rad)
@@ -183,9 +182,7 @@ def _event_minutes_on_utc_date(
         if hour_angle is None:
             return None
 
-        minutes = solar_noon_minutes + (
-            -4.0 * hour_angle if rising else 4.0 * hour_angle
-        )
+        minutes = solar_noon_minutes + (-4.0 * hour_angle if rising else 4.0 * hour_angle)
 
     if not math.isfinite(minutes):
         return None
@@ -256,9 +253,7 @@ def event_utc_datetime(
         candidate_dates.add(probe_local.astimezone(UTC).date())
 
     for utc_date in sorted(candidate_dates):
-        minutes = _cached_event_minutes(
-            utc_date, lat_key, lon_key, altitude_key, rising
-        )
+        minutes = _cached_event_minutes(utc_date, lat_key, lon_key, altitude_key, rising)
 
         if minutes is None or not math.isfinite(minutes):
             continue

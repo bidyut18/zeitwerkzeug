@@ -85,5 +85,4 @@ class Not:
         return not self.condition.evaluate(context)
 
 
-
 ConditionLike = AlwaysTrue | SunAltitudeAbove | TimeWindow | All | Any | Not

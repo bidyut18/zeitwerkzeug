@@ -10,8 +10,8 @@ from zeitwerkzeug.personas.profile import (
 
 __all__ = [
     "NightShift",
-    "PersonaProfile",
     "PersonaParser",
+    "PersonaProfile",
     "StandardWorker",
     "TimeBlock",
 ]
