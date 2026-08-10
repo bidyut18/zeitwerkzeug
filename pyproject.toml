@@ -1,22 +1,18 @@
-
-
 [project]
 name = "zeitwerkzeug"
-version = "0.0.1"
+version = "0.0.1a1"
 description = "Contextual time handling for Python: solar geometry, environmental conditions, human rhythms, and drifting schedules."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Bidyut Mahanta", email = "bidyutmahanta7768@outlook.com" }]
 
-
 dependencies = ["tzdata>=2024.1; sys_platform == 'win32'"]
 
 keywords = ["time", "scheduler", "timezone"]
 classifiers = [
-    "Development Status :: Alpha",
+    "Development Status :: 2 - Pre-Alpha",
     "Topic :: Scientific/Engineering :: Astronomy",
-
 ]
 
 [project.urls]
@@ -24,10 +20,8 @@ Homepage = "https://github.com/bidyut18/zeitwerkzeug"
 Repository = "https://github.com/bidyut18/zeitwerkzeug"
 Issues = "https://github.com/bidyut18/zeitwerkzeug/issues"
 
-
 [project.optional-dependencies]
 weather = ["httpx>=0.27"]
-
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
@@ -44,15 +38,15 @@ dev = [
     "pre-commit>=3.7",
 ]
 
-
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 asyncio_mode = "auto"
-addopts = "-ra --strict-markers"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "--cov=zeitwerkzeug --cov-fail-under=75 --cov-report=term-missing"
 
 [tool.ruff]
 target-version = "py311"
@@ -64,7 +58,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "ASYNC"]
 ignore = ["D"]
 
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.11"
 strict = true
 warn_unused_ignores = true
 warn_redundant_casts = true

@@ -1,5 +1,4 @@
 version: "3"
-
 vars:
   MYPY_TARGET: src
 
@@ -11,65 +10,42 @@ tasks:
       - task --list
 
   install:
-    desc: Install the package with development dependencies
+    desc: Install the package with all dependencies (dev + extras)
     cmds:
-      - uv sync --upgrade
-      - pip install -e ".[weather]"
-
-  install:uv:
-    desc: Install with uv instead of pip
-    cmds:
-      - uv venv
-      - uv pip install -e ".[dev]"
+      - uv sync --all-extras --dev
 
   lint:
     desc: Run lint checks with Ruff
     cmds:
-      - ruff check .
+      - uv run ruff check .
 
   lint:fix:
     desc: Automatically fix lint issues with Ruff
     cmds:
-      - ruff check --fix .
+      - uv run ruff check --fix .
 
   format:
     desc: Format code with Ruff
     cmds:
-      - ruff format .
+      - uv run ruff format .
 
   format:check:
     desc: Check formatting without modifying files
     cmds:
-      - ruff format --check .
+      - uv run ruff format --check .
 
   typecheck:
     desc: Run static type checking with mypy
     cmds:
-      - mypy {{.MYPY_TARGET}}
+      - uv run mypy {{.MYPY_TARGET}}
 
   test:
-    desc: Run tests with pytest
+    desc: Run tests with pytest (coverage configured in pyproject.toml)
     cmds:
-      - pytest
-
-  coverage:
-    desc: Run tests with coverage reporting
-    cmds:
-      - pytest --cov --cov-report=term-missing
-
-  precommit:
-    desc: Run pre-commit hooks against all files
-    cmds:
-      - pre-commit run --all-files
+      - uv run pytest
 
   check:
-    desc: Run lint and type checking
-    cmds:
-      - task: lint
-      - task: typecheck
-
-  ci:
-    desc: Full local CI check
+    desc: Run full local CI check
     cmds:
       - task: lint
       - task: format:check
@@ -80,4 +56,14 @@ tasks:
     desc: Remove caches, build artifacts, and temporary files
     cmds:
       - |
-        python -c "import shutil,pathlib; targets=['.pytest_cache','.mypy_cache','.ruff_cache','htmlcov','dist','build','coverage.xml','.coverage']; [shutil.rmtree(p, ignore_errors=True) if p.is_dir() else p.unlink(missing_ok=True) for p in [pathlib.Path(t) for t in targets]]; [shutil.rmtree(p, ignore_errors=True) for p in sorted(pathlib.Path('.').rglob('__pycache__'), key=lambda x: len(x.parts), reverse=True) if p.is_dir()]; [shutil.rmtree(p, ignore_errors=True) for p in sorted(pathlib.Path('src').rglob('*.egg-info'), key=lambda x: len(x.parts), reverse=True) if p.is_dir()]"
+        uv run  python  -c "import shutil,pathlib; targets=['.pytest_cache','.mypy_cache','.ruff_cache','htmlcov','dist','build','coverage.xml','.coverage']; [shutil.rmtree(p, ignore_errors=True) if p.is_dir() else p.unlink(missing_ok=True) for p in [pathlib.Path(t) for t in targets]]; [shutil.rmtree(p, ignore_errors=True) for p in sorted(pathlib.Path('.').rglob('__pycache__'), key=lambda x: len(x.parts), reverse=True) if p.is_dir()]; [shutil.rmtree(p, ignore_errors=True) for p in sorted(pathlib.Path('src').rglob('*.egg-info'), key=lambda x: len(x.parts), reverse=True) if p.is_dir()]"
+
+  dist:
+    desc: Build source and wheel distributions using uv
+    cmds:
+      - uv build
+
+  publish:
+    desc: Publish package to PyPI using uv (requires Trusted Publishing setup)
+    cmds:
+      - uv publish

@@ -127,10 +127,6 @@ def _hour_angle_deg(
     declination: float,
     altitude: float,
 ) -> float | None:
-    """Return hour angle in degrees for a target solar altitude.
-
-    Returns None if the target altitude is not crossed on that day.
-    """
     lat_rad = math.radians(latitude)
     dec_rad = math.radians(declination)
     alt_rad = math.radians(altitude)
@@ -142,14 +138,20 @@ def _hour_angle_deg(
     numerator = math.sin(alt_rad) - math.sin(lat_rad) * math.sin(dec_rad)
 
     if abs(denominator) < 1e-12:
-        # Polar singularity. If numerator is also near zero, treat as boundary.
         if abs(numerator) <= 1e-12:
             return 0.0
         return None
 
     cos_h = numerator / denominator
 
-    if cos_h > 1.0 or cos_h < -1.0:
+    # Clamp floating-point drift near [-1.0, 1.0] boundary
+    if cos_h > 1.0:
+        if cos_h - 1.0 < 1e-9:
+            return 0.0
+        return None
+    if cos_h < -1.0:
+        if -1.0 - cos_h < 1e-9:
+            return 180.0
         return None
 
     return math.degrees(math.acos(cos_h))
@@ -158,7 +160,6 @@ def _hour_angle_deg(
 def _utc_midnight(utc_date: date) -> datetime:
     return datetime.combine(utc_date, time.min, tzinfo=UTC)
 
-
 def _event_minutes_on_utc_date(
     utc_date: date,
     latitude: float,
@@ -166,13 +167,10 @@ def _event_minutes_on_utc_date(
     altitude: float,
     rising: bool,
 ) -> float | None:
-    """Approximate event time in minutes relative to UTC midnight."""
     base = _utc_midnight(utc_date)
-
-    # Initial estimate near solar noon.
     minutes = 720.0 - 4.0 * longitude
 
-    for _ in range(2):
+    for _ in range(10):
         approx = base + timedelta(minutes=minutes)
         geom = solar_geometry(approx)
 
@@ -182,7 +180,13 @@ def _event_minutes_on_utc_date(
         if hour_angle is None:
             return None
 
-        minutes = solar_noon_minutes + (-4.0 * hour_angle if rising else 4.0 * hour_angle)
+        next_minutes = solar_noon_minutes + (-4.0 * hour_angle if rising else 4.0 * hour_angle)
+        
+        # Stop early when change is less than ~0.006 seconds
+        if abs(next_minutes - minutes) < 1e-4:
+            minutes = next_minutes
+            break
+        minutes = next_minutes
 
     if not math.isfinite(minutes):
         return None
@@ -231,13 +235,14 @@ def event_utc_datetime(
     altitude: float,
     rising: bool,
 ) -> datetime:
-    """Return the UTC datetime for a solar altitude crossing on a local date."""
     tzinfo = location.tzinfo
     lat_key, lon_key, _ = location.key
     altitude_key = round(float(altitude), 4)
 
     local_start = datetime.combine(local_date, time.min, tzinfo=tzinfo)
-    local_end = local_start + timedelta(days=1)
+    # Define local end boundary using next calendar day
+    next_local_date = local_date + timedelta(days=1)
+    local_end = datetime.combine(next_local_date, time.min, tzinfo=tzinfo)
 
     start_utc = local_start.astimezone(UTC)
     end_utc = local_end.astimezone(UTC)
@@ -247,7 +252,6 @@ def event_utc_datetime(
         end_utc.date(),
     }
 
-    # Sample several local hours to handle timezone offsets near date boundaries.
     for hour in (0, 6, 12, 18, 23):
         probe_local = datetime.combine(local_date, time(hour, 0), tzinfo=tzinfo)
         candidate_dates.add(probe_local.astimezone(UTC).date())
@@ -270,12 +274,13 @@ def event_utc_datetime(
 
 
 def solar_noon_utc_datetime(local_date: date, location: Location) -> datetime:
-    """Return solar noon as a UTC datetime for a local date."""
     tzinfo = location.tzinfo
     _, lon_key, _ = location.key
 
     local_start = datetime.combine(local_date, time.min, tzinfo=tzinfo)
-    local_end = local_start + timedelta(days=1)
+    # Define local end boundary using next calendar day
+    next_local_date = local_date + timedelta(days=1)
+    local_end = datetime.combine(next_local_date, time.min, tzinfo=tzinfo)
 
     start_utc = local_start.astimezone(UTC)
     end_utc = local_end.astimezone(UTC)
@@ -299,8 +304,6 @@ def solar_noon_utc_datetime(local_date: date, location: Location) -> datetime:
     raise SolarEventNotFoundError(
         f"No solar noon for local_date={local_date}, location={location!r}"
     )
-
-
 def event_from_target_utc(
     local_date: date,
     location: Location,
@@ -333,10 +336,7 @@ def next_solar_event_utc(
     search_days: int = 400,
 ) -> datetime:
     """Find the next UTC occurrence of a solar target after a datetime."""
-    if after.tzinfo is None:
-        after = after.replace(tzinfo=UTC)
-    else:
-        after = after.astimezone(UTC)
+    after = after.replace(tzinfo=UTC) if after.tzinfo is None else after.astimezone(UTC)
 
     local_tz = location.tzinfo
     local_after = after.astimezone(local_tz)

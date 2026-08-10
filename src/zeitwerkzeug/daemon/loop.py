@@ -78,19 +78,7 @@ class QueueEntry(NamedTuple):
 
 
 class ExecutionLoop:
-    """Async scheduler designed for moving targets.
-
-    Features:
-        - resolves trigger times lazily
-        - supports condition plugins
-        - supports retry policies
-        - recalculates jobs at local midnight per job timezone
-        - safe for sync and async job functions
-        - supports concurrent job execution
-        - supports condition and job timeouts
-        - supports missed-run skipping
-        - keeps in-memory execution history
-    """
+    """Async scheduler designed for moving targets."""
 
     def __init__(
         self,
@@ -131,6 +119,7 @@ class ExecutionLoop:
         self._until: datetime | None = None
 
         self._semaphore = asyncio.Semaphore(max_concurrency)
+        self._available = max_concurrency
         self._inflight: set[asyncio.Task[None]] = set()
         self._history: deque[ExecutionRecord] = deque(maxlen=history_limit)
 
@@ -148,6 +137,48 @@ class ExecutionLoop:
         """Return execution history, newest last."""
         return tuple(self._history)
 
+    @property
+    def history_limit(self) -> int:
+        """Maximum number of execution records kept in memory."""
+        return self._history.maxlen or 0
+
+    @property
+    def available_concurrency(self) -> int:
+        """Number of concurrency slots currently free."""
+        return self._available
+
+    @property
+    def queue_snapshot(self) -> tuple[QueueEntry, ...]:
+        """Return a point-in-time copy of the internal queue."""
+        return tuple(self._queue)
+
+    def peek_next(self) -> QueueEntry | None:
+        """Return the earliest valid queue entry, discarding stale ones."""
+        return self._peek_valid()
+
+    def refresh_job(self, job_id: uuid.UUID) -> None:
+        """Bump *job_id*'s generation and schedule its next occurrence."""
+        job = self.registry.get_job(job_id)
+        if job is None:
+            return
+        self._refresh_job(job, self.clock.now())
+
+    def sync_registry(self) -> None:
+        """Activate new jobs and remove deleted ones from the queue."""
+        self._populate_missing()
+
+    async def acquire_concurrency_slot(self) -> bool:
+        """Acquire a concurrency slot directly."""
+        await self._semaphore.acquire()
+        self._available -= 1
+        return True
+
+    def release_concurrency_slot(self) -> None:
+        """Release a previously acquired concurrency slot safely."""
+        if self._available < self.max_concurrency:
+            self._semaphore.release()
+            self._available += 1
+
     def stats(self) -> dict[str, int | bool]:
         """Return basic operational metrics."""
         return {
@@ -157,6 +188,7 @@ class ExecutionLoop:
             "inflight_jobs": len(self._inflight),
             "history_size": len(self._history),
             "max_concurrency": self.max_concurrency,
+            "available_concurrency": self._available,
         }
 
     async def run(self, *, until: datetime | None = None) -> None:
@@ -237,6 +269,10 @@ class ExecutionLoop:
             logger.warning("Could not schedule job %s: %s", job.name, exc)
             return
 
+        if next_at is None:
+            logger.warning("Could not schedule job %s: no future occurrence", job.name)
+            return
+
         self._push(next_at, job.id, attempt, generation)
 
     def _schedule_retry(
@@ -253,7 +289,8 @@ class ExecutionLoop:
             self._schedule_next(job, now, attempt=1, generation=generation)
             return
 
-        if policy.max_attempts is not None and attempt >= policy.max_attempts:
+        max_attempts = getattr(policy, "max_attempts", None)
+        if max_attempts is not None and attempt >= max_attempts:
             logger.info(
                 "Job %s reached max attempts; scheduling next occurrence.",
                 job.name,
@@ -261,12 +298,19 @@ class ExecutionLoop:
             self._schedule_next(job, now, attempt=1, generation=generation)
             return
 
-        try:
-            limit_utc = policy.resolve_limit(now, job.trigger)
-        except ZeitwerkzeugError:
-            limit_utc = None
+        retry_interval = getattr(policy, "retry_interval", None)
+        if retry_interval is None:
+            self._schedule_next(job, now, attempt=1, generation=generation)
+            return
 
-        next_retry = now + policy.retry_interval
+        limit_utc = None
+        if hasattr(policy, "resolve_limit") and callable(policy.resolve_limit):
+            try:
+                limit_utc = policy.resolve_limit(now, job.trigger)
+            except ZeitwerkzeugError:
+                limit_utc = None
+
+        next_retry = now + retry_interval
 
         if self.retry_jitter_seconds > 0:
             jitter = random.uniform(0.0, self.retry_jitter_seconds)
@@ -343,13 +387,11 @@ class ExecutionLoop:
             if not acquired:
                 continue
 
-            # Re-check after acquiring the slot because the queue may have
-            # changed while waiting for concurrency capacity.
             entry = self._peek_valid()
             now = self.clock.now()
 
             if entry is None or entry.when > now:
-                self._semaphore.release()
+                self.release_concurrency_slot()
                 continue
 
             heapq.heappop(self._queue)
@@ -418,6 +460,7 @@ class ExecutionLoop:
                     self._semaphore.acquire(),
                     timeout=_SEMAPHORE_POLL_SECONDS,
                 )
+                self._available -= 1
                 return True
             except TimeoutError:
                 continue
@@ -429,7 +472,7 @@ class ExecutionLoop:
         try:
             await self._execute(entry.job_id, entry.when, entry.attempt)
         finally:
-            self._semaphore.release()
+            self.release_concurrency_slot()
 
     async def _execute(
         self,
@@ -588,8 +631,6 @@ class ExecutionLoop:
                 generation=self._generations.get(job.id, 1),
             )
         else:
-            # If the trigger has a fail policy, allow failed job executions
-            # to retry using the same policy used for failed conditions.
             if job.trigger.fail_policy is not None:
                 self._schedule_retry(job, finished_at, attempt)
             else:
@@ -628,7 +669,9 @@ class ExecutionLoop:
         if inspect.iscoroutinefunction(job.func):
             await job.func(*args, **job.kwargs)
         else:
-            await asyncio.to_thread(job.func, *args, **job.kwargs)
+            result = await asyncio.to_thread(job.func, *args, **job.kwargs)
+            if inspect.isawaitable(result):
+                await result
 
     # ------------------------------------------------------------------
     # History / observability
@@ -665,6 +708,15 @@ class ExecutionLoop:
                 job.name,
                 scheduled_for,
                 attempt,
+            )
+        elif status in ("skipped", "condition_failed"):
+            logger.info(
+                "job.%s name=%s scheduled_for=%s attempt=%s error=%s",
+                status,
+                job.name,
+                scheduled_for,
+                attempt,
+                error,
             )
         else:
             logger.warning(

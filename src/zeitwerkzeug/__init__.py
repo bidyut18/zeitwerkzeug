@@ -1,4 +1,4 @@
-"""Zeitwerkzeug public facade."""
+"""Zeitwerkzeug public api"""
 
 from logging import NullHandler, getLogger
 
@@ -32,7 +32,7 @@ from .personas.profile import (
     TimeBlock,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.0.1a1"
 
 getLogger("zeitwerkzeug").addHandler(NullHandler())
 

@@ -6,6 +6,7 @@ import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import timedelta
+from types import MappingProxyType
 from typing import ClassVar
 
 from zeitwerkzeug.context.scheduler import LazySchedule
@@ -22,7 +23,9 @@ class JobSpec:
     name: str
     tags: frozenset[str] = frozenset()
     args: tuple[object, ...] = ()
-    kwargs: Mapping[str, object] = field(default_factory=dict)
+    kwargs: Mapping[str, object] = field(
+        default_factory=lambda: MappingProxyType({}),
+    )
     pass_context: bool = False
 
     # Production controls.
@@ -49,6 +52,7 @@ class FuzzyCron:
 
     def __init__(self) -> None:
         self._jobs: dict[uuid.UUID, JobSpec] = {}
+        self._revision: int = 0
 
     @classmethod
     def default(cls) -> FuzzyCron:
@@ -56,6 +60,11 @@ class FuzzyCron:
         if cls._default is None:
             cls._default = cls()
         return cls._default
+
+    @classmethod
+    def reset_default(cls) -> None:
+        """Reset the process-wide default registry singleton."""
+        cls._default = None
 
     @classmethod
     def add_job(
@@ -91,6 +100,19 @@ class FuzzyCron:
         """Remove a job from the default registry."""
         cls.default().remove(job_id)
 
+    @staticmethod
+    def _is_valid_trigger(trigger: object) -> bool:
+        """Verify that *trigger* satisfies the scheduler protocol."""
+        required_attrs = (
+            "resolve_after",
+            "timezone_info",
+            "conditions",
+            "fail_policy",
+        )
+        if not all(hasattr(trigger, attr) for attr in required_attrs):
+            return False
+        return callable(getattr(trigger, "resolve_after", None))
+
     def register(
         self,
         func: Callable[..., object],
@@ -106,13 +128,13 @@ class FuzzyCron:
         max_latency: timedelta | None = None,
     ) -> JobSpec:
         """Register a job on this registry."""
-        if not isinstance(trigger, LazySchedule):
-            raise JobError("trigger must be a LazySchedule instance.")
+        if not self._is_valid_trigger(trigger):
+            raise JobError("trigger must satisfy the scheduler protocol.")
 
         job_id = uuid.uuid4()
 
         resolved_name = name
-        if not resolved_name:
+        if resolved_name is None:
             try:
                 resolved_name = func.__name__
             except AttributeError:
@@ -128,11 +150,11 @@ class FuzzyCron:
         job = JobSpec(
             id=job_id,
             func=func,
-            trigger=trigger,
+            trigger=trigger,  # type: ignore[arg-type]
             name=resolved_name,
             tags=tag_set,
             args=args,
-            kwargs=dict(kwargs) if kwargs is not None else {},
+            kwargs=MappingProxyType(dict(kwargs)) if kwargs is not None else MappingProxyType({}),
             pass_context=pass_context,
             job_timeout=job_timeout,
             condition_timeout=condition_timeout,
@@ -140,11 +162,13 @@ class FuzzyCron:
         )
 
         self._jobs[job_id] = job
+        self._revision += 1
         return job
 
     def remove(self, job_id: uuid.UUID) -> None:
         """Remove a job from this registry."""
-        self._jobs.pop(job_id, None)
+        if self._jobs.pop(job_id, None) is not None:
+            self._revision += 1
 
     def get_job(self, job_id: uuid.UUID) -> JobSpec | None:
         """Return a job by id."""
@@ -152,12 +176,19 @@ class FuzzyCron:
 
     def clear(self) -> None:
         """Remove all jobs from this registry."""
-        self._jobs.clear()
+        if self._jobs:
+            self._jobs.clear()
+            self._revision += 1
 
     @property
     def jobs(self) -> tuple[JobSpec, ...]:
         """Return all registered jobs."""
         return tuple(self._jobs.values())
+
+    @property
+    def revision(self) -> int:
+        """Monotonic counter incremented on every mutating operation."""
+        return self._revision
 
     def __len__(self) -> int:
         return len(self._jobs)

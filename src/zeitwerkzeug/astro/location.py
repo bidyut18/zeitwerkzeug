@@ -45,7 +45,7 @@ class Location:
 
         try:
             object.__setattr__(self, "_tzinfo", _resolve_tzinfo(self.timezone))
-        except (ZoneInfoNotFoundError, ValueError) as exc:
+        except (ZoneInfoNotFoundError, ValueError,TypeError) as exc:
             raise LocationError(f"Invalid timezone: {self.timezone!r}") from exc
 
     @property
