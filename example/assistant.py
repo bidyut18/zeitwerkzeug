@@ -156,7 +156,7 @@ FuzzyCron.add_job(
     name="water_plants_golden_hour",
     tags={"garden", "weather_dependent"},
     pass_context=True,
-    condition_timeout=timedelta(seconds=10),  
+    condition_timeout=timedelta(seconds=10),
 )
 
 FuzzyCron.add_job(
@@ -165,7 +165,7 @@ FuzzyCron.add_job(
     name="nightly_backup",
     tags={"infra", "night"},
     pass_context=True,
-    max_latency=timedelta(minutes=5), 
+    max_latency=timedelta(minutes=5),
 )
 
 FuzzyCron.add_job(

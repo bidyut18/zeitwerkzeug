@@ -47,6 +47,7 @@ tasks:
   check:
     desc: Run full local CI check
     cmds:
+      - task: format
       - task: lint
       - task: "format:check"
       - task: typecheck
