@@ -1,6 +1,6 @@
 [project]
 name = "zeitwerkzeug"
-version = "0.0.1a1"
+version = "0.0.1"
 description = "Contextual time handling for Python: solar geometry, environmental conditions, human rhythms, and drifting schedules."
 readme = "README.md"
 requires-python = ">=3.11"

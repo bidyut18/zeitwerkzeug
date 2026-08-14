@@ -17,6 +17,8 @@ wheels/
 
 *.code-workspace
 
+prototype/**
 
 # personal idea
 roadmap.md
+*.zip

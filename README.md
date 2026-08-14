@@ -1,9 +1,11 @@
 # Zeitwerkzeug
 [![CI](https://github.com/bidyut18/zeitwerkzeug/actions/workflows/ci.yml/badge.svg)](https://github.com/bidyut18/zeitwerkzeug/actions/workflows/ci.yml)
+ [![PyPI version](https://badge.fury.io/py/zeitwerkzeug.svg)](https://badge.fury.io/py/zeitwerkzeug)
 
+
+<h3>⏰<i>Project is in initial state; Do not use it in production server. We are still experimenting on it  </i></h3>
 
 **Contextual Time for Python**
-
 Zeitwerkzeug (German for "time tool") is an experimental library that treats time not as a fixed stream of timestamps but as something derived from **solar geometry**, **human rhythms**, **environmental conditions**, and **user intent**. It's designed for building adaptive scheduling and automation systems.
 
 ---
@@ -36,44 +38,99 @@ pip install "zeitwerkzeug[weather]"
 
 ## Quick Start
 
-### 1. Water the Garden at Sunrise (If Clear)
+### Solar-Powered Personal Assistant
 
 ```python
-from datetime import timedelta
-from zeitwerkzeug import Location, schedule, FuzzyCron, ExecutionLoop
-from zeitwerkzeug.integrations.weather import ClearWeather
+"""
+Zeitwerkzeug — Solar-Powered Personal Assistant
+"""
 
-# Location (Osaka, Japan)
-location = Location(lat=34.6937, lon=135.5020, timezone="Asia/Tokyo")
+import asyncio
+import logging
+from datetime import UTC, datetime, time, timedelta
 
-
-def water_plants(ctx):
-    print(f"💧 Watering at {ctx.triggered_at}")
-
-
-# Build trigger: 30 minutes after sunrise, only if cloud cover ≤ 40%
-trigger = (
-    schedule.at("sunrise", location=location)
-    .offset(minutes=30)
-    .require(
-        ClearWeather(
-            lat=location.lat,
-            lon=location.lon,
-            max_cloud_cover=40,
-        )
-    )
-    .on_fail(retry_interval=timedelta(minutes=15), max_attempts=3)
+from zeitwerkzeug import (
+    ClearWeather,
+    ExecutionLoop,
+    FuzzyCron,
+    Location,
+    ScheduleBuilder,
+    SolarEvent,
+    SunAltitudeAbove,
+    TimeWindow,
 )
 
-# Register and run
-cron = FuzzyCron()
-cron.register(water_plants, trigger, name="morning-water")
+logging.basicConfig(level=logging.INFO)
 
-loop = ExecutionLoop(registry=cron)
-# await loop.run()   # non‑blocking
+# 1. Define your location
+BERLIN = Location(lat=52.52, lon=13.405, timezone="Europe/Berlin")
+
+# 2. Build schedules with the fluent API
+schedule = ScheduleBuilder()
+
+# Sunrise — open blinds, but only if the sun is actually up and it's a reasonable hour
+sunrise = (
+    schedule.at(SolarEvent.SUNRISE, location=BERLIN)
+    .require(
+        SunAltitudeAbove(location=BERLIN, min_altitude=0.0),
+        TimeWindow(start=time(6, 0), end=time(22, 0), tz="Europe/Berlin"),
+    )
+    .on_fail(retry_interval_mins=5, max_attempts=3)
+)
+
+# Golden hour — water plants, but only if the weather is clear
+golden_hour = (
+    schedule.at(SolarEvent.GOLDEN_HOUR, location=BERLIN)
+    .require(
+        ClearWeather(lat=BERLIN.lat, lon=BERLIN.lon, max_cloud_cover=30),
+    )
+    .on_fail(retry_interval_mins=15, max_attempts=2)
+)
+
+# Civil dusk — close blinds every evening
+dusk = schedule.at(SolarEvent.CIVIL_DUSK, location=BERLIN).on_fail(
+    retry_interval=timedelta(minutes=10), max_attempts=5
+)
+
+
+# 3. Register jobs
+async def open_blinds(ctx):
+    print(f"🌅  Opening blinds at {ctx.triggered_at.isoformat()}")
+
+
+async def water_plants(ctx):
+    print(f"🌱  Watering plants at {ctx.triggered_at.isoformat()}")
+
+
+async def close_blinds(ctx):
+    print(f"🌇  Closing blinds at {ctx.triggered_at.isoformat()}")
+
+
+FuzzyCron.add_job(open_blinds, trigger=sunrise, name="open_blinds", pass_context=True)
+FuzzyCron.add_job(water_plants, trigger=golden_hour, name="water_plants", pass_context=True)
+FuzzyCron.add_job(close_blinds, trigger=dusk, name="close_blinds", pass_context=True)
+
+
+# 4. Run the daemon
+async def main():
+    loop = ExecutionLoop(
+        max_concurrency=4,
+        default_job_timeout=timedelta(minutes=2),
+        midnight_recalibration=True,
+    )
+    # Run for 5 minutes in this demo; in production use `await loop.run()`
+    await loop.run(until=datetime.now(UTC) + timedelta(minutes=5))
+
+    print("\nExecution history:")
+    for r in loop.history:
+        print(f"  {r.job_name:20} | {r.status:15} | attempt={r.attempt}")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
-### 2. Solar Event with Custom Angle
+### Solar Event with Custom Angle
 
 ```python
 from zeitwerkzeug import Location, schedule
@@ -87,7 +144,7 @@ golden_hour = SolarAngle(altitude=-4.0, rising=True, name="golden_hour")
 trigger = schedule.at(golden_hour, location=location)
 ```
 
-### 3. Human Persona & Time Windows
+### Human Persona & Time Windows
 
 ```python
 from datetime import time, timedelta
@@ -102,7 +159,7 @@ trigger = schedule.at(lambda t: persona.wake_datetime(t) + timedelta(hours=2)).r
 )
 ```
 
-### 4. Logical Condition Combinators
+### Logical Condition Combinators
 
 ```python
 from zeitwerkzeug.context import All, Not, SunAltitudeAbove, TimeWindow
@@ -117,7 +174,7 @@ trigger = schedule.at("sunset", location=location).require(
 )
 ```
 
-### 5. Async Job with Retry Policy
+### Async Job with Retry Policy
 
 ```python
 from datetime import timedelta
@@ -169,7 +226,6 @@ schedule.at(target, location=None, tz=None)
 
 **Chaining methods:**
 
-- `.offset(minutes=30)` – shift the resolved time
 - `.require(*conditions)` – add required conditions
 - `.on_fail(retry_interval=..., max_attempts=..., limit=...)` – attach retry policy
 
@@ -297,7 +353,6 @@ def water_plants(ctx):
 async def main():
     trigger = (
         schedule.at("sunrise", location=LOCATION)
-        .offset(minutes=30)
         .require(
             All(
                 ClearWeather(
@@ -386,4 +441,3 @@ Contributions are welcome! Please:
 - Built for Python 3.11+ with `asyncio` and modern type hints
 
 ---
-
