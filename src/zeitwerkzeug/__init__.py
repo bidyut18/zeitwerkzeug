@@ -20,8 +20,9 @@ from .context.scheduler import (
     ScheduleBuilder,
     schedule,
 )
+from .daemon import SystemClock
 from .daemon.cron import FuzzyCron, JobSpec
-from .daemon.loop import ExecutionLoop, SystemClock
+from .daemon.loop import ExecutionLoop
 from .integrations.weather import ClearWeather
 from .interfaces import ConditionPlugin, ExecutionContext
 from .personas.parser import PersonaParser
@@ -32,11 +33,11 @@ from .personas.profile import (
     TimeBlock,
 )
 
-__version__ = "0.0.1a1"
+__version__ = "0.0.3"
 
 getLogger("zeitwerkzeug").addHandler(NullHandler())
 
-__version__ = "0.0.1"
+__version__ = "0.0.3"
 
 
 def __getattr__(name: str) -> object:
