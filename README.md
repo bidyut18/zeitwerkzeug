@@ -148,8 +148,8 @@ trigger = schedule.at(golden_hour, location=location)
 
 ```python
 from datetime import time, timedelta
-from zeitwerkzeug import schedule, StandardWorker
-from zeitwerkzeug.context import TimeWindow
+from zeitwerkzeug import schedule, StandardWorker, TimeWindow
+
 
 persona = StandardWorker(tz="Asia/Tokyo")
 
@@ -178,7 +178,7 @@ trigger = schedule.at("sunset", location=location).require(
 
 ```python
 from datetime import timedelta
-from zeitwerkzeug import schedule, FuzzyCron, ExecutionLoop
+from zeitwerkzeug import schedule, FuzzyCron, ExecutionLoop, Location
 
 
 async def fetch_weather(ctx):
@@ -338,7 +338,7 @@ import asyncio
 from datetime import timedelta
 
 from zeitwerkzeug import Location, schedule, FuzzyCron, ExecutionLoop
-from zeitwerkzeug.context import All, SunAltitudeAbove
+from zeitwerkzeug import All, SunAltitudeAbove
 from zeitwerkzeug.integrations.weather import ClearWeather
 
 # Osaka, Japan
@@ -355,12 +355,14 @@ async def main():
         schedule.at("sunrise", location=LOCATION)
         .require(
             All(
-                ClearWeather(
-                    lat=LOCATION.lat,
-                    lon=LOCATION.lon,
-                    max_cloud_cover=MAX_CLOUD_COVER,
-                ),
-                SunAltitudeAbove(LOCATION, min_altitude=-6.0),
+                (
+                    ClearWeather(
+                        lat=LOCATION.lat,
+                        lon=LOCATION.lon,
+                        max_cloud_cover=MAX_CLOUD_COVER,
+                    ),
+                    SunAltitudeAbove(LOCATION, min_altitude=-6.0),
+                )
             )
         )
         .on_fail(

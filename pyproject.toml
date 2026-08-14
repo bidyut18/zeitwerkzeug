@@ -1,6 +1,6 @@
 [project]
 name = "zeitwerkzeug"
-version = "0.0.1"
+version = "0.0.2"
 description = "Contextual time handling for Python: solar geometry, environmental conditions, human rhythms, and drifting schedules."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -11,7 +11,7 @@ dependencies = ["tzdata>=2024.1; sys_platform == 'win32'"]
 
 keywords = ["time", "scheduler", "timezone"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Topic :: Scientific/Engineering :: Astronomy",
 ]
 
