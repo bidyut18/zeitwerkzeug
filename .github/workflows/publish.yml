@@ -20,8 +20,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
-          enable-cache: false
-
+          enable-cache: false    
       - name: Test Package
         run: uv run pytest --cov=zeitwerkzeug --cov-report=term-missing
 
@@ -60,8 +59,8 @@ jobs:
       - name: Install built package and dev dependencies
         run: |
           uv pip install dist/*.whl
-          uv sync --only-group dev  # installs dev dependencies
-          
+          uv sync --upgrade --all-extras
+
       - name: Smoke test import
         run: |
           uv run python -c "import zeitwerkzeug; print(zeitwerkzeug.__version__)"
