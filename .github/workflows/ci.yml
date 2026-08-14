@@ -18,19 +18,18 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5  # Updated to v5 (Node.js 24)
+        uses: actions/checkout@v5
 
       - name: Install uv and set Python version
-        uses: astral-sh/setup-uv@v5  # Updated to v5 (Node.js 24)
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
-          enable-cache: false  # Disable cache to avoid 400 errors
+          enable-cache: false
 
       - name: Install Task
-        uses: arduino/setup-task@v2
-        with:
-          version: '3.x'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -fsSL https://taskfile.dev/install.sh | sh
+          sudo mv ./bin/task /usr/local/bin/task
 
       - name: Install dependencies
         run: uv sync --all-extras --dev

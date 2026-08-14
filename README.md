@@ -1,4 +1,6 @@
 # Zeitwerkzeug
+[![CI](https://github.com/bidyut18/zeitwerkzeug/actions/workflows/ci.yml/badge.svg)](https://github.com/bidyut18/zeitwerkzeug/actions/workflows/ci.yml)
+
 
 **Contextual Time for Python**
 

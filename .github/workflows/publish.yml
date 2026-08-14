@@ -4,7 +4,7 @@ on:
   push:
     branches: ["release"]
     tags:
-      - "v*" # Triggers on tags like v0.0.1a1
+      - "v*"
   workflow_dispatch: {}
 
 jobs:
@@ -15,12 +15,15 @@ jobs:
       contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v5
         with:
           enable-cache: false
+
+      - name: Test Package
+        run: uv run pytest --cov=zeitwerkzeug --cov-report=term-missing
 
       - name: Build package
         run: uv build
@@ -31,16 +34,53 @@ jobs:
           name: dist
           path: dist/
 
+  test-build:
+    name: Test installed package
+    needs: [build]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Download distributions artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Install uv and set Python version
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: false
+
+      - name: Install built package and dev dependencies
+        run: |
+          uv pip install dist/*.whl
+          uv sync --only-group dev  # installs dev dependencies
+          
+      - name: Smoke test import
+        run: |
+          uv run python -c "import zeitwerkzeug; print(zeitwerkzeug.__version__)"
+
+      - name: Run tests against installed package
+        run: |
+          # Run tests from the source tree (but they will import the installed package)
+          uv run pytest tests/ --cov=zeitwerkzeug --cov-report=term-missing
+
   publish:
     name: Publish to PyPI
-    needs: [build]
+    needs: [build, test-build] # Wait for both build and test to pass
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     environment:
       name: pypi
       url: https://pypi.org/p/zeitwerkzeug
     permissions:
-      id-token: write # Required for Trusted Publishing (OIDC)
+      id-token: write
       contents: read
 
     steps:
@@ -51,7 +91,7 @@ jobs:
           path: dist/
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v5
         with:
           enable-cache: false
 
