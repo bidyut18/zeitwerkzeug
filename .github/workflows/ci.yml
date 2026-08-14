@@ -24,19 +24,16 @@ jobs:
         uses: astral-sh/setup-uv@v4
         with:
           python-version: ${{ matrix.python-version }}
-          enable-cache: true # Automatically caches uv downloads and resolutions
+          enable-cache: true
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: '3.x'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
-      - name: Check code formatting
-        run: uv run ruff format --check .
-
-      - name: Run linter
-        run: uv run ruff check .
-
-      - name: Run type checking
-        run: uv run mypy src
-
-      - name: Run tests with coverage
-        run: uv run pytest
+      - name: Run full check (format, lint, typecheck, test)
+        run: task check

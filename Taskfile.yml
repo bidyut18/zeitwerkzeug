@@ -19,7 +19,7 @@ tasks:
     cmds:
       - uv run ruff check .
 
-  lint:fix:
+  "lint:fix":
     desc: Automatically fix lint issues with Ruff
     cmds:
       - uv run ruff check --fix .
@@ -29,7 +29,7 @@ tasks:
     cmds:
       - uv run ruff format .
 
-  format:check:
+  "format:check":
     desc: Check formatting without modifying files
     cmds:
       - uv run ruff format --check .
@@ -48,7 +48,7 @@ tasks:
     desc: Run full local CI check
     cmds:
       - task: lint
-      - task: format:check
+      - task: "format:check"
       - task: typecheck
       - task: test
 
@@ -56,7 +56,21 @@ tasks:
     desc: Remove caches, build artifacts, and temporary files
     cmds:
       - |
-        uv run  python  -c "import shutil,pathlib; targets=['.pytest_cache','.mypy_cache','.ruff_cache','htmlcov','dist','build','coverage.xml','.coverage']; [shutil.rmtree(p, ignore_errors=True) if p.is_dir() else p.unlink(missing_ok=True) for p in [pathlib.Path(t) for t in targets]]; [shutil.rmtree(p, ignore_errors=True) for p in sorted(pathlib.Path('.').rglob('__pycache__'), key=lambda x: len(x.parts), reverse=True) if p.is_dir()]; [shutil.rmtree(p, ignore_errors=True) for p in sorted(pathlib.Path('src').rglob('*.egg-info'), key=lambda x: len(x.parts), reverse=True) if p.is_dir()]"
+        uv run python -c "
+        import shutil, pathlib
+        targets = ['.pytest_cache', '.mypy_cache', '.ruff_cache', 'htmlcov', 'dist', 'build', 'coverage.xml', '.coverage']
+        for p in [pathlib.Path(t) for t in targets]:
+            if p.is_dir():
+                shutil.rmtree(p, ignore_errors=True)
+            else:
+                p.unlink(missing_ok=True)
+        for p in sorted(pathlib.Path('.').rglob('__pycache__'), key=lambda x: len(x.parts), reverse=True):
+            if p.is_dir():
+                shutil.rmtree(p, ignore_errors=True)
+        for p in sorted(pathlib.Path('src').rglob('*.egg-info'), key=lambda x: len(x.parts), reverse=True):
+            if p.is_dir():
+                shutil.rmtree(p, ignore_errors=True)
+        "
 
   dist:
     desc: Build source and wheel distributions using uv
@@ -67,3 +81,8 @@ tasks:
     desc: Publish package to PyPI using uv (requires Trusted Publishing setup)
     cmds:
       - uv publish
+
+  "publish:test":
+    desc: Publish to Test PyPI (requires token or trusted publishing)
+    cmds:
+      - uv publish --publish-url https://test.pypi.org/legacy/

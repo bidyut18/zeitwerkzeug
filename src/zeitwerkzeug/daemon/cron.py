@@ -137,6 +137,9 @@ class FuzzyCron:
         if resolved_name is None:
             try:
                 resolved_name = func.__name__
+                # If the function is a lambda, generate a unique name
+                if resolved_name == "<lambda>":
+                    resolved_name = f"job-{job_id.hex[:8]}"
             except AttributeError:
                 resolved_name = f"job-{job_id.hex[:8]}"
 
@@ -150,7 +153,7 @@ class FuzzyCron:
         job = JobSpec(
             id=job_id,
             func=func,
-            trigger=trigger,  # type: ignore[arg-type]
+            trigger=trigger,
             name=resolved_name,
             tags=tag_set,
             args=args,

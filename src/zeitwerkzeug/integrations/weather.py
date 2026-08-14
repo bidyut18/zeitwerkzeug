@@ -24,6 +24,7 @@ class ClearWeather:
     ) -> None:
         self.lat = lat
         self.lon = lon
+        self.api_key: str | None = None
         self.max_cloud_cover = max_cloud_cover
         self.limiter: OpenMeteoRateLimiter | None
 
@@ -54,7 +55,11 @@ class ClearWeather:
 
         # 2. Make the HTTP call
         headers = {"User-Agent": "Zeitwerkzeug-Python-Library/0.0.1"}
-        params = {"latitude": self.lat, "longitude": self.lon, "current_weather": True}
+        params: dict[str, bool | float | str] = {
+            "latitude": self.lat,
+            "longitude": self.lon,
+            "current_weather": True,
+        }
 
         if self.api_key:
             params["apikey"] = self.api_key
@@ -67,7 +72,7 @@ class ClearWeather:
                 response.raise_for_status()
                 data = response.json()
 
-                cloud_cover = data.get("current_weather", {}).get("cloudcover", 100)
+                cloud_cover = int(data.get("current_weather", {}).get("cloudcover", 100))
                 return cloud_cover <= self.max_cloud_cover
 
             except httpx.HTTPError:

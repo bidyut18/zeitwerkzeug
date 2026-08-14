@@ -27,8 +27,6 @@ _RealAsyncClient = httpx.AsyncClient
 
 
 def _make_fake_async_client(payload: dict):
-    """Return a factory that creates a fake httpx.AsyncClient."""
-
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(status_code=200, json=payload)
 
@@ -40,8 +38,6 @@ def _make_fake_async_client(payload: dict):
 
 
 def _make_fake_error_async_client(status_code: int = 500):
-    """Return a factory that creates a fake httpx.AsyncClient that errors."""
-
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(status_code=status_code)
 
@@ -54,8 +50,6 @@ def _make_fake_error_async_client(status_code: int = 500):
 
 @pytest.fixture
 def noop_job() -> Callable[[], None]:
-    """Return a no-op function suitable for job registration."""
-
     def _job() -> None:
         return None
 
@@ -64,13 +58,12 @@ def noop_job() -> Callable[[], None]:
 
 @pytest.fixture
 def fuzzy_cron() -> FuzzyCron:
-    """Return a fresh, isolated registry."""
+    """Return a fresh, isolated registry (used by non-daemon tests)."""
     return FuzzyCron()
 
 
 @pytest.fixture
 def utc_noon_trigger():
-    """Return a daily-at-12:00-UTC trigger."""
     return schedule.at(time(12, 0), tz="UTC")
 
 
@@ -128,7 +121,6 @@ def utc_parser(utc_worker: StandardWorker) -> PersonaParser:
 def execution_context() -> ExecutionContext:
     now = datetime(2026, 8, 9, 12, 0, tzinfo=UTC)
     trigger = MockTrigger(next_at=datetime(2026, 8, 9, 13, 0, tzinfo=UTC))
-
     return ExecutionContext(
         job_name="test-job",
         scheduled_for=now,
@@ -194,15 +186,12 @@ def _utc(value: datetime) -> datetime:
 
 @pytest.fixture(autouse=True)
 def _clear_default_registry():
-    """Reset process-wide default registry before and after every test."""
     FuzzyCron.reset_default()
     yield
     FuzzyCron.reset_default()
 
 
 class MockClock:
-    """Deterministic clock for testing the execution loop."""
-
     def __init__(self, start: datetime | None = None) -> None:
         self._now = start or datetime(2026, 8, 9, 12, 0, tzinfo=UTC)
 
@@ -217,8 +206,6 @@ class MockClock:
 
 
 class FakeFailPolicy:
-    """Deterministic fail-policy double for retry tests."""
-
     def __init__(
         self,
         *,
@@ -235,16 +222,12 @@ class FakeFailPolicy:
 
     def resolve_limit(self, now: datetime, trigger: object) -> datetime | None:
         self.resolve_limit_calls.append((now, trigger))
-
         if self._raise_on_resolve_limit:
             raise ZeitwerkzeugError("fake resolve_limit failure")
-
         return self._limit
 
 
 class MockTrigger:
-    """Deterministic trigger stub."""
-
     def __init__(
         self,
         *,
@@ -257,12 +240,10 @@ class MockTrigger:
     ) -> None:
         if next_at is not None and occurrences is not None:
             raise ValueError("Provide either next_at or occurrences, not both.")
-
         if occurrences is None:
             raw_occurrences = [next_at] if next_at is not None else []
         else:
             raw_occurrences = list(occurrences)
-
         self._occurrences = sorted(_utc(when) for when in raw_occurrences if when is not None)
         self.timezone_info = timezone_info
         self.conditions = tuple(conditions)
@@ -272,13 +253,10 @@ class MockTrigger:
     def resolve_after(self, after: datetime) -> datetime | None:
         if self._raise_on_resolve:
             raise ZeitwerkzeugError("trigger resolve error")
-
         after = _utc(after)
-
         for when in self._occurrences:
             if when > after:
                 return when
-
         return None
 
 
@@ -300,10 +278,8 @@ class AsyncCountingCondition:
 
     async def evaluate(self, context: ExecutionContext) -> bool:
         self.call_count += 1
-
         if self.delay:
             await asyncio.sleep(self.delay)
-
         return self.result
 
 
@@ -314,7 +290,6 @@ class FailingCondition:
 
 @pytest.fixture
 def mock_trigger():
-
     def _factory(*args, **kwargs) -> MockTrigger:
         return MockTrigger(*args, **kwargs)
 
@@ -326,24 +301,37 @@ def fake_clock() -> MockClock:
     return MockClock()
 
 
+# ====== DAEMON FIXTURES ======
+
+
 @pytest.fixture
-def execution_loop(fake_clock: MockClock, fuzzy_cron: FuzzyCron) -> ExecutionLoop:
-    return ExecutionLoop(
-        registry=fuzzy_cron,
+def loop_and_registry(fake_clock: MockClock):
+    """Return (ExecutionLoop, FuzzyCron) sharing a fresh isolated registry."""
+    registry = FuzzyCron()
+    loop = ExecutionLoop(
+        registry=registry,
         clock=fake_clock,
         max_concurrency=2,
         history_limit=10,
     )
+    return loop, registry
 
 
+# For tests that only need the loop
 @pytest.fixture
-def register_job(fuzzy_cron: FuzzyCron):
+def execution_loop(loop_and_registry):
+    return loop_and_registry[0]
 
-    def _register(func, trigger=None, *, name: str = "test-job", **kwargs):
+
+# Registration helper that uses the registry from the combined fixture
+@pytest.fixture
+def register_job(loop_and_registry):
+    registry = loop_and_registry[1]
+
+    def _register(func, trigger=None, *, name="test-job", **kwargs):
         if trigger is None:
             trigger = MockTrigger(next_at=datetime(2026, 8, 9, 13, 0, tzinfo=UTC))
-
-        return fuzzy_cron.register(
+        return registry.register(
             func,
             trigger,
             name=name,
@@ -355,7 +343,6 @@ def register_job(fuzzy_cron: FuzzyCron):
 
 @pytest.fixture
 def fake_fail_policy():
-
     def _factory(
         *,
         max_attempts: int | None = 3,

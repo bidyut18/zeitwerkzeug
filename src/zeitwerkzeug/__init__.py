@@ -39,7 +39,7 @@ getLogger("zeitwerkzeug").addHandler(NullHandler())
 __version__ = "0.0.1"
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> object:
     """Lazily load optional integrations only when requested."""
     if name == "ClearWeather":
         try:

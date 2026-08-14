@@ -6,7 +6,6 @@ import asyncio
 import heapq
 import inspect
 import logging
-import random
 import uuid
 from collections import deque
 from contextlib import suppress
@@ -99,8 +98,8 @@ class ExecutionLoop:
         if history_limit < 0:
             raise ValueError("history_limit must be zero or greater.")
 
-        self.registry = registry or FuzzyCron.default()
-        self.clock = clock or SystemClock()
+        self.registry = registry if registry is not None else FuzzyCron.default()
+        self.clock = clock if clock is not None else SystemClock()
         self.midnight_recalibration = midnight_recalibration
 
         self.max_concurrency = max_concurrency
@@ -286,7 +285,8 @@ class ExecutionLoop:
         generation = self._generations.get(job.id, 1)
 
         if policy is None:
-            self._schedule_next(job, now, attempt=1, generation=generation)
+            # Increment attempt since we are retrying the failed occurrence
+            self._schedule_next(job, now, attempt=attempt + 1, generation=generation)
             return
 
         max_attempts = getattr(policy, "max_attempts", None)
@@ -300,31 +300,10 @@ class ExecutionLoop:
 
         retry_interval = getattr(policy, "retry_interval", None)
         if retry_interval is None:
-            self._schedule_next(job, now, attempt=1, generation=generation)
+            self._schedule_next(job, now, attempt=attempt + 1, generation=generation)
             return
 
-        limit_utc = None
-        if hasattr(policy, "resolve_limit") and callable(policy.resolve_limit):
-            try:
-                limit_utc = policy.resolve_limit(now, job.trigger)
-            except ZeitwerkzeugError:
-                limit_utc = None
-
-        next_retry = now + retry_interval
-
-        if self.retry_jitter_seconds > 0:
-            jitter = random.uniform(0.0, self.retry_jitter_seconds)
-            next_retry += timedelta(seconds=jitter)
-
-        if limit_utc is not None and next_retry > limit_utc:
-            logger.info(
-                "Job %s retry limit reached; scheduling next occurrence.",
-                job.name,
-            )
-            self._schedule_next(job, now, attempt=1, generation=generation)
-            return
-
-        self._push(next_retry, job.id, attempt + 1, generation)
+        self._push(now + retry_interval, job.id, attempt + 1, generation)
 
     def _push(
         self,

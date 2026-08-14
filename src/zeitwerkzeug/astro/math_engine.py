@@ -160,6 +160,7 @@ def _hour_angle_deg(
 def _utc_midnight(utc_date: date) -> datetime:
     return datetime.combine(utc_date, time.min, tzinfo=UTC)
 
+
 def _event_minutes_on_utc_date(
     utc_date: date,
     latitude: float,
@@ -181,7 +182,7 @@ def _event_minutes_on_utc_date(
             return None
 
         next_minutes = solar_noon_minutes + (-4.0 * hour_angle if rising else 4.0 * hour_angle)
-        
+
         # Stop early when change is less than ~0.006 seconds
         if abs(next_minutes - minutes) < 1e-4:
             minutes = next_minutes
@@ -304,6 +305,8 @@ def solar_noon_utc_datetime(local_date: date, location: Location) -> datetime:
     raise SolarEventNotFoundError(
         f"No solar noon for local_date={local_date}, location={location!r}"
     )
+
+
 def event_from_target_utc(
     local_date: date,
     location: Location,

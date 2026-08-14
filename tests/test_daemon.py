@@ -133,13 +133,17 @@ def test_registry_revision_tracks_mutations(
     fuzzy_cron.remove(job.id)
     assert fuzzy_cron.revision == 2
 
+    # clear on empty registry does not change revision
     fuzzy_cron.clear()
     assert fuzzy_cron.revision == 2
 
     job2 = fuzzy_cron.register(noop_job, trigger, name="revision-job-2")
-    fuzzy_cron.remove(job2.id)
     assert fuzzy_cron.revision == 3
 
+    fuzzy_cron.remove(job2.id)
+    assert fuzzy_cron.revision == 4
+
+    # clear on empty registry again does not change revision
     fuzzy_cron.clear()
     assert fuzzy_cron.revision == 4
 
@@ -693,10 +697,16 @@ async def test_execute_condition_failed_schedules_retry(
 
     await execution_loop._execute(job.id, fake_clock.now(), attempt=1)
 
+    # Verify history records the failure
     history = execution_loop.history
-
     assert len(history) == 1
     assert history[0].status == "condition_failed"
+
+    # Verify a retry was actually scheduled in the queue
+    entries = execution_loop.queue_snapshot
+    assert len(entries) == 1
+    assert entries[0].job_id == job.id
+    assert entries[0].attempt == 2
 
 
 @pytest.mark.asyncio
