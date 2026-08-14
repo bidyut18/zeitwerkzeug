@@ -18,13 +18,13 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5  # Updated to v5 (Node.js 24)
 
       - name: Install uv and set Python version
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v5  # Updated to v5 (Node.js 24)
         with:
           python-version: ${{ matrix.python-version }}
-          enable-cache: true
+          enable-cache: false  # Disable cache to avoid 400 errors
 
       - name: Install Task
         uses: arduino/setup-task@v2
