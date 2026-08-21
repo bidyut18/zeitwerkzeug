@@ -55,7 +55,10 @@ jobs:
           enable-cache: false
 
       - name: Install built package
-        run: uv pip install dist/*.whl || uv pip install dist/*.tar.gz
+        run: |
+          uv venv
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
+          uv pip install dist/*.whl || uv pip install dist/*.tar.gz
 
       - name: Install test dependencies
         run: uv sync --upgrade --all-extras
