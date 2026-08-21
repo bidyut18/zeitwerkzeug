@@ -55,8 +55,7 @@ jobs:
           enable-cache: false
 
       - name: Install built package
-        run: |
-          uv pip install dist/*.whl || uv pip install dist/*.tar.gz
+        run: uv pip install --system dist/*.whl || uv pip install --system dist/*.tar.gz
 
       - name: Install test dependencies
         run: uv sync --upgrade --all-extras
