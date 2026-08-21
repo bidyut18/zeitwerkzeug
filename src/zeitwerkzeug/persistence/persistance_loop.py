@@ -238,7 +238,7 @@ def _wrap_job(
             """Best-effort persistence that does not mask the job result."""
             try:
                 _run(coro)
-            except (Exception, asyncio.CancelledError):
+            except Exception, asyncio.CancelledError:
                 logger.exception(
                     "Failed to persist execution state for job %r",
                     name,

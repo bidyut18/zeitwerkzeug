@@ -1,6 +1,6 @@
 [project]
 name = "zeitwerkzeug"
-version = "0.0.4"
+version = "0.0.5"
 description = "Contextual time handling for Python: solar geometry, environmental conditions, human rhythms, and drifting schedules."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -45,7 +45,7 @@ testpaths = ["tests"]
 pythonpath = ["src", "."]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-addopts = "--cov=zeitwerkzeug --cov-fail-under=75 --cov-report=term-missing"
+addopts = "--cov=zeitwerkzeug --cov-fail-under=80 --cov-report=term-missing"
 
 [tool.ruff]
 target-version = "py314"
@@ -57,7 +57,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "ASYNC"]
 ignore = ["D"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.14"
 strict = true
 warn_unused_ignores = true
 warn_redundant_casts = true

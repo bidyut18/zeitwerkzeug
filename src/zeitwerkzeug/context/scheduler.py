@@ -6,7 +6,6 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta, tzinfo
 from datetime import time as clock_time
-from typing import TypeAlias
 from zoneinfo import ZoneInfo
 
 from zeitwerkzeug.astro.events import SolarAngle, SolarEvent, SolarTarget
@@ -15,9 +14,9 @@ from zeitwerkzeug.astro.math_engine import next_solar_event_utc
 from zeitwerkzeug.exceptions import ScheduleError
 from zeitwerkzeug.interfaces import ConditionPlugin
 
-TimeTarget: TypeAlias = SolarTarget | datetime | clock_time | Callable[[datetime], datetime]
+type TimeTarget = SolarTarget | datetime | clock_time | Callable[[datetime], datetime]
 
-LimitTarget: TypeAlias = SolarEvent | SolarAngle | datetime | clock_time | timedelta
+type LimitTarget = SolarEvent | SolarAngle | datetime | clock_time | timedelta
 
 
 def _as_utc(dt: datetime, default_tz: tzinfo) -> datetime:
