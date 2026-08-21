@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.14"]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -59,7 +59,7 @@ jobs:
           uv pip install dist/*.whl || uv pip install dist/*.tar.gz
 
       - name: Install test dependencies
-        run: uv sync --upgrade --all-extras 
+        run: uv sync --upgrade --all-extras
 
       - name: Smoke test import
         run: |

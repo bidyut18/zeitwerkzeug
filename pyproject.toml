@@ -3,7 +3,7 @@ name = "zeitwerkzeug"
 version = "0.0.4"
 description = "Contextual time handling for Python: solar geometry, environmental conditions, human rhythms, and drifting schedules."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 license = { text = "MIT" }
 authors = [{ name = "Bidyut Mahanta", email = "bidyutmahanta7768@outlook.com" }]
 
@@ -48,7 +48,7 @@ asyncio_default_fixture_loop_scope = "function"
 addopts = "--cov=zeitwerkzeug --cov-fail-under=75 --cov-report=term-missing"
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py314"
 line-length = 100
 src = ["src", "tests"]
 
