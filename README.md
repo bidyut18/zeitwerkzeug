@@ -1,6 +1,6 @@
 <p align="center">
   <img
-    src="assets/logo.svg"
+    src="https://raw.githubusercontent.com/bidyut18/zeitwerkzeug/main/assets/logo.svg"
     alt="Zeitwerkzeug Logo"
     width="320"
     height="320"
