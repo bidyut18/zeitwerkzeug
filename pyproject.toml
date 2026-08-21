@@ -3,7 +3,7 @@ name = "zeitwerkzeug"
 version = "0.0.4"
 description = "Contextual time handling for Python: solar geometry, environmental conditions, human rhythms, and drifting schedules."
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "Bidyut Mahanta", email = "bidyutmahanta7768@outlook.com" }]
 
