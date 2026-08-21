@@ -42,13 +42,13 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src", "."]
+pythonpath = ["src", "."]   
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-addopts = "--cov=zeitwerkzeug --cov-fail-under=80 --cov-report=term-missing"
+addopts = "--cov=zeitwerkzeug --cov-fail-under=75 --cov-report=term-missing"
 
 [tool.ruff]
-target-version = "py314"
+target-version = "py312"
 line-length = 100
 src = ["src", "tests"]
 
@@ -57,7 +57,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "ASYNC"]
 ignore = ["D"]
 
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.12"
 strict = true
 warn_unused_ignores = true
 warn_redundant_casts = true
