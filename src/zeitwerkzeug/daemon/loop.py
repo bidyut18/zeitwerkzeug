@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import heapq
 import uuid
 from collections import deque
 from datetime import date, datetime, timedelta
+from heapq import heappop
 
 from zeitwerkzeug.daemon.clock import SystemClock, _ensure_utc
 from zeitwerkzeug.daemon.constants import _EMPTY_QUEUE_SLEEP_SECONDS, _MIDNIGHT_LOOP_SLEEP_MINUTES
@@ -98,7 +98,8 @@ class ExecutionLoop(SleepingMixin, SchedulingMixin, ExecutionMixin):
 
     def refresh_job(self, job_id: uuid.UUID) -> None:
         """Bump *job_id*'s generation and schedule its next occurrence."""
-        job = self.registry.get_job(job_id)
+        registry = self.registry
+        job = registry.get_job(job_id)
         if job is None:
             return
         self._refresh_job(job, self.clock.now())
@@ -109,26 +110,36 @@ class ExecutionLoop(SleepingMixin, SchedulingMixin, ExecutionMixin):
 
     async def acquire_concurrency_slot(self) -> bool:
         """Acquire a concurrency slot directly."""
-        await self._semaphore.acquire()
+        semaphore = self._semaphore
+        await semaphore.acquire()
         self._available -= 1
         return True
 
     def release_concurrency_slot(self) -> None:
         """Release a previously acquired concurrency slot safely."""
-        if self._available < self.max_concurrency:
+        max_concurrency = self.max_concurrency
+        if self._available < max_concurrency:
             self._semaphore.release()
             self._available += 1
 
     def stats(self) -> dict[str, int | bool]:
         """Return basic operational metrics."""
+        running = self._running
+        queue_depth = len(self._queue)
+        active_jobs = len(self._active)
+        inflight_jobs = len(self._inflight)
+        history_size = len(self._history)
+        max_concurrency = self.max_concurrency
+        available_concurrency = self._available
+
         return {
-            "running": self._running,
-            "queue_depth": len(self._queue),
-            "active_jobs": len(self._active),
-            "inflight_jobs": len(self._inflight),
-            "history_size": len(self._history),
-            "max_concurrency": self.max_concurrency,
-            "available_concurrency": self._available,
+            "running": running,
+            "queue_depth": queue_depth,
+            "active_jobs": active_jobs,
+            "inflight_jobs": inflight_jobs,
+            "history_size": history_size,
+            "max_concurrency": max_concurrency,
+            "available_concurrency": available_concurrency,
         }
 
     async def run(self, *, until: datetime | None = None) -> None:
@@ -145,8 +156,9 @@ class ExecutionLoop(SleepingMixin, SchedulingMixin, ExecutionMixin):
                 if self.midnight_recalibration:
                     tg.create_task(self._midnight_loop())
         finally:
-            if self._inflight:
-                await asyncio.gather(*self._inflight, return_exceptions=True)
+            inflight = self._inflight
+            if inflight:
+                await asyncio.gather(*inflight, return_exceptions=True)
 
             self._running = False
 
@@ -156,56 +168,78 @@ class ExecutionLoop(SleepingMixin, SchedulingMixin, ExecutionMixin):
 
     async def _queue_loop(self) -> None:
         """Continuously execute jobs as their scheduled times arrive."""
+        _peek_valid = self._peek_valid
+        _populate_missing = self._populate_missing
+        _acquire_concurrency_slot = self._acquire_concurrency_slot
+        release_concurrency_slot = self.release_concurrency_slot
+        _sleep_with_wake = self._sleep_with_wake
+        _wait_until = self._wait_until
+        _execute_entry = self._execute_entry
+        _queue = self._queue
+        _inflight = self._inflight
+        _inflight_add = _inflight.add
+        _inflight_discard = _inflight.discard
+        create_task = asyncio.create_task
+        empty_queue_sleep = timedelta(seconds=_EMPTY_QUEUE_SLEEP_SECONDS)
+
         while self._running:
-            if self._until is not None and self.clock.now() >= self._until:
+            until = self._until
+            if until is not None and self.clock.now() >= until:
                 self.stop()
                 break
 
-            self._populate_missing()
-            entry = self._peek_valid()
+            _populate_missing()
+            entry = _peek_valid()
 
             if entry is None:
-                await self._sleep_with_wake(timedelta(seconds=_EMPTY_QUEUE_SLEEP_SECONDS))
+                await _sleep_with_wake(empty_queue_sleep)
                 continue
 
             now = self.clock.now()
+            when = entry.when
 
-            if entry.when > now:
-                await self._wait_until(entry.when)
+            if when > now:
+                await _wait_until(when)
                 continue
 
-            acquired = await self._acquire_concurrency_slot()
+            acquired = await _acquire_concurrency_slot()
 
             if not acquired:
                 continue
 
-            entry = self._peek_valid()
+            entry = _peek_valid()
             now = self.clock.now()
 
             if entry is None or entry.when > now:
-                self.release_concurrency_slot()
+                release_concurrency_slot()
                 continue
 
-            heapq.heappop(self._queue)
+            heappop(_queue)
 
-            task = asyncio.create_task(self._execute_entry(entry))
-            self._inflight.add(task)
-            task.add_done_callback(self._inflight.discard)
+            task = create_task(_execute_entry(entry))
+            _inflight_add(task)
+            task.add_done_callback(_inflight_discard)
 
     async def _midnight_loop(self) -> None:
         """Recalibrate job schedules at local midnight for each timezone."""
+        _sleep_with_wake = self._sleep_with_wake
+        _next_refresh_time = self._next_refresh_time
+        _refresh_due_jobs = self._refresh_due_jobs
+        _wait_until = self._wait_until
+        midnight_sleep = timedelta(minutes=_MIDNIGHT_LOOP_SLEEP_MINUTES)
+
         while self._running:
             now = self.clock.now()
-            next_refresh = self._next_refresh_time(now)
+            next_refresh = _next_refresh_time(now)
 
             if next_refresh is None:
-                await self._sleep_with_wake(timedelta(minutes=_MIDNIGHT_LOOP_SLEEP_MINUTES))
+                await _sleep_with_wake(midnight_sleep)
                 continue
 
             if next_refresh > now:
-                await self._wait_until(next_refresh)
+                await _wait_until(next_refresh)
 
             if not self._running:
                 break
 
-            self._refresh_due_jobs(self.clock.now())
+            _refresh_due_jobs(self.clock.now())

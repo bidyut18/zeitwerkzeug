@@ -5,21 +5,17 @@ from __future__ import annotations
 import asyncio
 from contextlib import suppress
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
 
+from zeitwerkzeug.daemon.clock import SystemClock
 from zeitwerkzeug.daemon.constants import _MAX_WAIT_SECONDS
-
-if TYPE_CHECKING:
-    from zeitwerkzeug.daemon.clock import SystemClock
 
 
 class SleepingMixin:
     """Provides _wait_until and _sleep_with_wake."""
 
-    if TYPE_CHECKING:
-        _running: bool
-        clock: SystemClock
-        _wake: asyncio.Event
+    _running: bool
+    clock: SystemClock
+    _wake: asyncio.Event
 
     async def _wait_until(self, when: datetime) -> None:
         """Sleep until *when*, waking early if the loop is signalled."""

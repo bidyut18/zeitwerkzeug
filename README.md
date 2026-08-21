@@ -1,34 +1,104 @@
-# Zeitwerkzeug
-[![CI](https://github.com/bidyut18/zeitwerkzeug/actions/workflows/ci.yml/badge.svg)](https://github.com/bidyut18/zeitwerkzeug/actions/workflows/ci.yml)
- [![PyPI version](https://badge.fury.io/py/zeitwerkzeug.svg)](https://badge.fury.io/py/zeitwerkzeug)
+<p align="center">
+  <img
+    src="assets/logo.svg"
+    alt="Zeitwerkzeug Logo"
+    width="320"
+    height="320"
+  >
+</p>
 
+<h1 align="center">
+  Zeitwerkzeug
+</h1>
 
-<h3>⏰<i>Project is in initial state; Do not use it in production server. We are still experimenting on it  </i></h3>
+<p align="center">
+  <strong>Contextual Time &amp; Adaptive Scheduling for Python</strong>
+</p>
 
-**Contextual Time for Python**
-Zeitwerkzeug (German for "time tool") is an experimental library that treats time not as a fixed stream of timestamps but as something derived from **solar geometry**, **human rhythms**, **environmental conditions**, and **user intent**. It's designed for building adaptive scheduling and automation systems.
+<p align="center">
+  <img
+    src="https://github.com/bidyut18/zeitwerkzeug/actions/workflows/ci.yml/badge.svg"
+    alt="CI"
+  >
+  <img
+    src="https://img.shields.io/pypi/v/zeitwerkzeug"
+    alt="PyPI version"
+  >
+  <img
+    src="https://img.shields.io/pypi/dm/zeitwerkzeug"
+    alt="Downloads"
+  >
+</p>
+
+> ⏰ **Alpha project:** `zeitwerkzeug` is in early development.
+> Expect breaking API changes before a  `1.0` release.
+
+---
+
+## Overview
+
+**Zeitwerkzeug** — German for *“time tool”* — treats time not as a fixed stream of clock timestamps, but as a dynamic resource derived from:
+
+- solar geometry,
+- human circadian rhythms,
+- environmental conditions,
+- and contextual intent.
+
+It is designed for:
+
+- IoT,
+- home automation,
+- context-aware daemons,
+- adaptive background jobs.
+
+---
+
+## Table of contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [Key concepts](#key-concepts)
+  - [Schedules](#schedules-lazyschedule)
+  - [Conditions](#conditions-conditionplugin)
+  - [Persona profiles](#persona-profiles)
+  - [Fail & retry policies](#fail--retry-policies)
+  - [Execution loop](#execution-loop)
+- [Persistence & state storage](#persistence--state-storage)
+  - [Persistence quick start](#persistence-quick-start)
+  - [Surviving restarts](#surviving-restarts-job-restore-pattern)
+- [Weather integration](#weather-integration-open-meteo)
+- [Full example: smart garden irrigation](#full-example-smart-garden-irrigation)
+- [Development](#development)
+- [Project structure](#project-structure)
+- [License](#license)
+- [Contributing](#contributing)
+- [Acknowledgments](#acknowledgments)
 
 ---
 
 ## Features
 
-- **Solar Geometry** – dawn, golden hour, dusk, and custom solar angles
-- **Human Personas** – wake/sleep rhythms, weekend shifts, and proportional time blocks
-- **Context-Aware Conditions** – weather, sun altitude, time windows, logical combinators
-- **Async Execution Loop** – drifting schedules that recalibrate over time
-- **Lazy Schedules** – fluent API for building complex triggers
-- **Retry & Fail Policies** – automatic retries with configurable backoff
-- **Rate-Limited Integrations** – Open-Meteo weather API with built‑in safety margins
+- ☀️ **Solar geometry** — dawn, golden hour, dusk, and arbitrary solar altitude angles.
+- 🧑‍💼 **Human personas** — wake/sleep rhythms, weekend schedule shifts, and proportional awake blocks.
+- 🌦️ **Context-aware conditions** — real-time weather, sun altitude checks, local time windows, and logical combinators.
+- 🔄 **Async execution loop** — drifting schedules that recalibrate over time and across midnight transitions.
+- ⚡ **Lazy schedules** — fluent, chainable API for constructing complex triggers.
+- 🛡️ **Retry & backoff** — configurable retry policies with interval and deadline constraints.
+- 🌐 **Weather integration** — built-in Open-Meteo client with rate-limiting protection.
+- 💾 **SQLite persistence** — execution history logging and safe restart recovery without pickle risks.
 
 ---
 
 ## Installation
 
+Install the core package:
+
 ```bash
 pip install zeitwerkzeug
 ```
 
-For weather integrations (Open‑Meteo):
+For weather integrations using Open-Meteo:
 
 ```bash
 pip install "zeitwerkzeug[weather]"
@@ -36,14 +106,12 @@ pip install "zeitwerkzeug[weather]"
 
 ---
 
-## Quick Start
+## Quick start
 
-### Solar-Powered Personal Assistant
+### Solar-powered personal assistant
 
 ```python
-"""
-Zeitwerkzeug — Solar-Powered Personal Assistant
-"""
+"""Zeitwerkzeug — Solar-powered personal assistant."""
 
 import asyncio
 import logging
@@ -68,190 +136,292 @@ BERLIN = Location(lat=52.52, lon=13.405, timezone="Europe/Berlin")
 # 2. Build schedules with the fluent API
 schedule = ScheduleBuilder()
 
-# Sunrise — open blinds, but only if the sun is actually up and it's a reasonable hour
+# Sunrise — open blinds, but only if the sun is actually up
+# and it is a reasonable hour.
 sunrise = (
     schedule.at(SolarEvent.SUNRISE, location=BERLIN)
     .require(
         SunAltitudeAbove(location=BERLIN, min_altitude=0.0),
-        TimeWindow(start=time(6, 0), end=time(22, 0), tz="Europe/Berlin"),
+        TimeWindow(
+            start=time(6, 0),
+            end=time(22, 0),
+            tz="Europe/Berlin",
+        ),
     )
-    .on_fail(retry_interval_mins=5, max_attempts=3)
+    .on_fail(
+        retry_interval=timedelta(minutes=5),
+        max_attempts=3,
+    )
 )
 
-# Golden hour — water plants, but only if the weather is clear
+# Golden hour — water plants, but only if the weather is clear.
 golden_hour = (
     schedule.at(SolarEvent.GOLDEN_HOUR, location=BERLIN)
     .require(
-        ClearWeather(lat=BERLIN.lat, lon=BERLIN.lon, max_cloud_cover=30),
+        ClearWeather(
+            lat=BERLIN.lat,
+            lon=BERLIN.lon,
+            max_cloud_cover=30,
+        ),
     )
-    .on_fail(retry_interval_mins=15, max_attempts=2)
+    .on_fail(
+        retry_interval=timedelta(minutes=15),
+        max_attempts=2,
+    )
 )
 
-# Civil dusk — close blinds every evening
+# Civil dusk — close blinds every evening.
 dusk = schedule.at(SolarEvent.CIVIL_DUSK, location=BERLIN).on_fail(
-    retry_interval=timedelta(minutes=10), max_attempts=5
+    retry_interval=timedelta(minutes=10),
+    max_attempts=5,
 )
 
 
-# 3. Register jobs
+# 3. Define jobs
 async def open_blinds(ctx):
-    print(f"🌅  Opening blinds at {ctx.triggered_at.isoformat()}")
+    print(f"🌅 Opening blinds at {ctx.triggered_at.isoformat()}")
 
 
 async def water_plants(ctx):
-    print(f"🌱  Watering plants at {ctx.triggered_at.isoformat()}")
+    print(f"🌱 Watering plants at {ctx.triggered_at.isoformat()}")
 
 
 async def close_blinds(ctx):
-    print(f"🌇  Closing blinds at {ctx.triggered_at.isoformat()}")
+    print(f"🌇 Closing blinds at {ctx.triggered_at.isoformat()}")
 
 
-FuzzyCron.add_job(open_blinds, trigger=sunrise, name="open_blinds", pass_context=True)
-FuzzyCron.add_job(water_plants, trigger=golden_hour, name="water_plants", pass_context=True)
-FuzzyCron.add_job(close_blinds, trigger=dusk, name="close_blinds", pass_context=True)
+# 4. Register jobs
+FuzzyCron.add_job(
+    open_blinds,
+    trigger=sunrise,
+    name="open_blinds",
+    pass_context=True,
+)
+
+FuzzyCron.add_job(
+    water_plants,
+    trigger=golden_hour,
+    name="water_plants",
+    pass_context=True,
+)
+
+FuzzyCron.add_job(
+    close_blinds,
+    trigger=dusk,
+    name="close_blinds",
+    pass_context=True,
+)
 
 
-# 4. Run the daemon
+# 5. Run the daemon
 async def main():
     loop = ExecutionLoop(
         max_concurrency=4,
         default_job_timeout=timedelta(minutes=2),
         midnight_recalibration=True,
     )
-    # Run for 5 minutes in this demo; in production use `await loop.run()`
+
+    # Run for 5 minutes in this demo.
+    # In production, usually use: await loop.run()
     await loop.run(until=datetime.now(UTC) + timedelta(minutes=5))
 
     print("\nExecution history:")
-    for r in loop.history:
-        print(f"  {r.job_name:20} | {r.status:15} | attempt={r.attempt}")
+    for record in loop.history:
+        print(f"  {record.job_name:20} | {record.status:15} | attempt={record.attempt}")
 
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-### Solar Event with Custom Angle
+---
+
+## Solar event with custom angle
 
 ```python
 from zeitwerkzeug import Location, schedule
 from zeitwerkzeug.astro import SolarAngle
 
-location = Location(lat=34.6937, lon=135.5020, timezone="Asia/Tokyo")
+location = Location(
+    lat=34.6937,
+    lon=135.5020,
+    timezone="Asia/Tokyo",
+)
 
 # Custom solar angle: golden hour (-4°) on the rising branch
-golden_hour = SolarAngle(altitude=-4.0, rising=True, name="golden_hour")
+golden_hour = SolarAngle(
+    altitude=-4.0,
+    rising=True,
+    name="golden_hour",
+)
 
 trigger = schedule.at(golden_hour, location=location)
 ```
 
-### Human Persona & Time Windows
+---
+
+## Human persona & time windows
 
 ```python
 from datetime import time, timedelta
-from zeitwerkzeug import schedule, StandardWorker, TimeWindow
 
+from zeitwerkzeug import StandardWorker, TimeWindow, schedule
 
 persona = StandardWorker(tz="Asia/Tokyo")
 
 # Schedule: 2 hours after waking, within a time window
 trigger = schedule.at(lambda t: persona.wake_datetime(t) + timedelta(hours=2)).require(
-    TimeWindow(start=time(6, 0), end=time(9, 0), tz="Asia/Tokyo")
-)
-```
-
-### Logical Condition Combinators
-
-```python
-from zeitwerkzeug.context import All, Not, SunAltitudeAbove, TimeWindow
-
-location = Location(lat=34.6937, lon=135.5020, timezone="Asia/Tokyo")
-
-trigger = schedule.at("sunset", location=location).require(
-    All(
-        SunAltitudeAbove(location, min_altitude=-6.0),  # civil twilight
-        Not(TimeWindow(start=time(0, 0), end=time(5, 0), tz="Asia/Tokyo")),
+    TimeWindow(
+        start=time(6, 0),
+        end=time(9, 0),
+        tz="Asia/Tokyo",
     )
 )
 ```
 
-### Async Job with Retry Policy
+---
+
+## Logical condition combinators
+
+```python
+from datetime import time
+
+from zeitwerkzeug import Location, schedule
+from zeitwerkzeug.context import All, Not, SunAltitudeAbove, TimeWindow
+
+location = Location(
+    lat=34.6937,
+    lon=135.5020,
+    timezone="Asia/Tokyo",
+)
+
+trigger = schedule.at("sunset", location=location).require(
+    All(
+        (
+            SunAltitudeAbove(
+                location=location,
+                min_altitude=-6.0,
+            ),
+            Not(
+                TimeWindow(
+                    start=time(0, 0),
+                    end=time(5, 0),
+                    tz="Asia/Tokyo",
+                )
+            ),
+        )
+    )
+)
+```
+
+---
+
+## Async job with retry policy
 
 ```python
 from datetime import timedelta
-from zeitwerkzeug import schedule, FuzzyCron, ExecutionLoop, Location
+
+from zeitwerkzeug import ExecutionLoop, FuzzyCron, Location, schedule
 
 
 async def fetch_weather(ctx):
     print(f"🌤️ Fetching weather at {ctx.triggered_at}")
 
 
-location = Location(lat=34.6937, lon=135.5020, timezone="Asia/Tokyo")
+location = Location(
+    lat=34.6937,
+    lon=135.5020,
+    timezone="Asia/Tokyo",
+)
 
 trigger = schedule.at("sunrise", location=location).on_fail(
-    retry_interval=timedelta(minutes=5), max_attempts=3
+    retry_interval=timedelta(minutes=5),
+    max_attempts=3,
 )
 
 cron = FuzzyCron()
-cron.register(fetch_weather, trigger, name="weather-fetch")
+cron.register(
+    fetch_weather,
+    trigger,
+    name="weather-fetch",
+)
 
 loop = ExecutionLoop(
     registry=cron,
     default_job_timeout=timedelta(seconds=30),
     max_concurrency=5,
 )
+
 # await loop.run()
 ```
 
 ---
 
-## Key Concepts
+## Key concepts
 
 ### Schedules (`LazySchedule`)
 
-A schedule is a lazily‑resolved trigger. Build one with the `schedule` builder:
+A schedule is a lazily resolved trigger. Build one with the `schedule` builder:
 
 ```python
 schedule.at(target, location=None, tz=None)
 ```
 
-**Supported targets:**
+Supported targets:
 
-| Type | Example |
-|------|---------|
-| `SolarEvent` | `"sunrise"`, `"sunset"`, `"golden_hour"` |
-| `SolarAngle` | `SolarAngle(altitude=-4.0, rising=True)` |
-| `datetime` | `datetime(2026, 1, 1, 12, 0, tzinfo=UTC)` |
-| `time` | `time(14, 30)` (daily recurring) |
-| `Callable` | `lambda t: t + timedelta(hours=1)` |
+| Type         | Example                                             |
+| ------------ | --------------------------------------------------- |
+| `SolarEvent` | `"sunrise"`, `"sunset"`, `"golden_hour"`           |
+| `SolarAngle` | `SolarAngle(altitude=-4.0, rising=True)`           |
+| `datetime`   | `datetime(2026, 1, 1, 12, 0, tzinfo=UTC)`          |
+| `time`       | `time(14, 30)` — daily recurring                   |
+| `Callable`   | `lambda t: t + timedelta(hours=1)`                 |
 
-**Chaining methods:**
+Chaining methods:
 
-- `.require(*conditions)` – add required conditions
-- `.on_fail(retry_interval=..., max_attempts=..., limit=...)` – attach retry policy
+- `.require(*conditions)` — add required conditions.
+- `.on_fail(retry_interval=..., max_attempts=..., limit=...)` — attach a retry policy.
+
+---
 
 ### Conditions (`ConditionPlugin`)
 
-Conditions are evaluated immediately before job execution. Built‑in conditions include:
+Conditions are evaluated immediately before job execution.
 
-| Condition | Description |
-|-----------|-------------|
-| `SunAltitudeAbove(location, min_altitude)` | Sun altitude ≥ threshold |
-| `TimeWindow(start, end, tz)` | Time within a local window |
-| `ClearWeather(lat, lon, max_cloud_cover)` | Cloud cover ≤ threshold (requires `[weather]` extra) |
-| `All(*conditions)` | Logical AND |
-| `Any(*conditions)` | Logical OR |
-| `Not(condition)` | Logical NOT |
+Built-in conditions include:
 
-### Persona Profiles
+| Condition                                      | Description                                      |
+| ---------------------------------------------- | ------------------------------------------------ |
+| `SunAltitudeAbove(location, min_altitude)`     | Sun altitude is greater than or equal to threshold. |
+| `TimeWindow(start, end, tz)`                   | Time is within a local window.                    |
+| `ClearWeather(lat, lon, max_cloud_cover)`      | Cloud cover is below threshold. Requires `[weather]` extra. |
+| `All(*conditions)`                             | Logical AND.                                      |
+| `Any(*conditions)`                             | Logical OR.                                       |
+| `Not(condition)`                               | Logical NOT.                                      |
+
+---
+
+### Persona profiles
 
 Model human daily rhythms with wake/sleep anchors.
 
 ```python
-from zeitwerkzeug.personas import StandardWorker, NightShift, PersonaProfile
+from datetime import time, timedelta
 
-# Built‑in profiles
-worker = StandardWorker(wake="06:30", sleep="22:30", tz="Asia/Tokyo")
-night = NightShift(wake="13:00", sleep="05:00", tz="Asia/Tokyo")
+from zeitwerkzeug.personas import NightShift, PersonaProfile, StandardWorker
+
+# Built-in profiles
+worker = StandardWorker(
+    wake="06:30",
+    sleep="22:30",
+    tz="Asia/Tokyo",
+)
+
+night = NightShift(
+    wake="13:00",
+    sleep="05:00",
+    tz="Asia/Tokyo",
+)
 
 # Custom profile
 custom = PersonaProfile(
@@ -263,39 +433,50 @@ custom = PersonaProfile(
 )
 ```
 
-**Available methods:**
-- `wake_datetime(reference)` – wake time for a reference date
-- `sleep_datetime(reference)` – sleep time (next day if needed)
-- `awake_block(reference)` – full awake window
-- `proportional_block(reference, start_frac, end_frac)` – fractional window
+Available methods:
 
-### Fail & Retry Policies
+- `wake_datetime(reference)` — wake time for a reference date.
+- `sleep_datetime(reference)` — sleep time, moving to the next day if needed.
+- `awake_block(reference)` — full awake window.
+- `proportional_block(reference, start_frac, end_frac)` — fractional window.
+
+---
+
+### Fail & retry policies
 
 Attach a retry policy to a schedule:
 
 ```python
+from datetime import timedelta
+
 schedule.at("sunset", location=location).on_fail(
-    retry_interval=timedelta(minutes=5),  # between retries
-    max_attempts=3,  # total attempts
-    limit=datetime(2026, 1, 1),  # stop trying after this time
-    # limit can also be "sunrise", timedelta, or time
+    retry_interval=timedelta(minutes=5),
+    max_attempts=3,
+    limit=timedelta(hours=2),
 )
 ```
 
-### Execution Loop
+`limit` can also be a `datetime`, `time`, `timedelta`, or supported solar target, depending on the API surface available in your version.
+
+---
+
+### Execution loop
 
 The `ExecutionLoop` runs the scheduler with these capabilities:
 
-- **Drifting schedules** – `resolve_after()` recalculates on each run
-- **Midnight recalibration** – re‑evaluates schedules daily per timezone
-- **Concurrency control** – semaphore‑based limit (default 32)
-- **History** – retains execution records (configurable limit)
-- **Graceful shutdown** – via `stop()`
+- drifting schedules — `resolve_after()` recalculates on each run,
+- midnight recalibration — re-evaluates schedules daily per timezone,
+- concurrency control — semaphore-based limit,
+- history — retains execution records,
+- graceful shutdown via `stop()`.
 
 ```python
+from datetime import UTC, datetime, timedelta
+
+from zeitwerkzeug import ExecutionLoop, FuzzyCron
+
 loop = ExecutionLoop(
     registry=FuzzyCron(),
-    clock=SystemClock(),
     max_concurrency=32,
     default_job_timeout=timedelta(minutes=5),
     default_condition_timeout=timedelta(seconds=30),
@@ -306,12 +487,122 @@ loop = ExecutionLoop(
 await loop.run(until=datetime(2026, 1, 1, tzinfo=UTC))
 ```
 
-### Weather Integration (Open‑Meteo)
+---
 
-The `ClearWeather` condition uses the [Open‑Meteo API](https://open-meteo.com/).
+## Persistence & state storage
 
-- **Free tier** – ratelimited (safety margins: 500/min, 4500/hr, 9000/day)
-- **Commercial** – pass your `api_key` for higher limits
+`zeitwerkzeug` includes built-in SQLite persistence for:
+
+- execution history logging,
+- job metadata storage,
+- restart recovery,
+- avoiding unsafe serialization formats such as pickle.
+
+---
+
+## Persistence quick start
+
+Replace `ExecutionLoop` with `PersistentExecutionLoop` and initialize the database before running:
+
+```python
+import asyncio
+from datetime import timedelta
+
+from zeitwerkzeug import Location, ScheduleBuilder, SolarEvent
+from zeitwerkzeug.persistence import PersistentExecutionLoop
+
+BERLIN = Location(
+    lat=52.52,
+    lon=13.405,
+    timezone="Europe/Berlin",
+)
+
+
+async def open_blinds(ctx):
+    print(f"🌅 Opening blinds at {ctx.triggered_at}")
+
+
+async def main():
+    loop = PersistentExecutionLoop(
+        db_path="scheduler.db",
+        max_concurrency=4,
+        default_job_timeout=timedelta(minutes=2),
+        midnight_recalibration=True,
+    )
+
+    # Create database tables and prepare history tracking.
+    await loop.init()
+
+    schedule = ScheduleBuilder()
+    sunrise = schedule.at(SolarEvent.SUNRISE, location=BERLIN)
+
+    loop.registry.add_job(
+        open_blinds,
+        trigger=sunrise,
+        name="open_blinds",
+    )
+
+    await loop.run()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+---
+
+## Surviving restarts: job restore pattern
+
+Re-register jobs dynamically on boot by supplying a loader function that rebuilds the callable and trigger.
+
+```python
+import asyncio
+import importlib
+
+from zeitwerkzeug import Location, ScheduleBuilder, SolarEvent
+from zeitwerkzeug.persistence import JobRecord, PersistentExecutionLoop
+
+BERLIN = Location(
+    lat=52.52,
+    lon=13.405,
+    timezone="Europe/Berlin",
+)
+
+
+async def job_loader(record: JobRecord):
+    module = importlib.import_module(record.module)
+    func = getattr(module, record.qualname)
+
+    # Reconstruct the trigger context.
+    schedule = ScheduleBuilder()
+    trigger = schedule.at(SolarEvent.SUNRISE, location=BERLIN)
+
+    return func, trigger
+
+
+async def main():
+    loop = PersistentExecutionLoop(db_path="scheduler.db")
+
+    await loop.init()
+
+    # Restore job registrations from the database.
+    await loop.registry.restore_jobs(job_loader)
+
+    await loop.run()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+---
+
+## Weather integration: Open-Meteo
+
+The `ClearWeather` condition uses the [Open-Meteo API](https://open-meteo.com/).
+
+- **Free tier** — rate-limited, with safety margins.
+- **Commercial tier** — pass your `api_key` for higher limits.
 
 ```python
 from zeitwerkzeug.integrations.weather import ClearWeather
@@ -324,25 +615,38 @@ condition = ClearWeather(
 )
 ```
 
-**License & Attribution:** Weather data provided by [Open‑Meteo](https://open-meteo.com/). Used under the CC BY 4.0 license.
+License & attribution:
+
+> Weather data provided by [Open-Meteo](https://open-meteo.com/).
+> Used under the CC BY 4.0 license.
 
 ---
 
-## Full Example: Smart Garden Irrigation
+## Full example: smart garden irrigation
 
 ```python
 #!/usr/bin/env python3
-"""Water the garden at sunrise + 30 min, if clear and not too windy."""
+"""Water the garden at sunrise if it is clear and the sun is high enough."""
 
 import asyncio
 from datetime import timedelta
 
-from zeitwerkzeug import Location, schedule, FuzzyCron, ExecutionLoop
-from zeitwerkzeug import All, SunAltitudeAbove
+from zeitwerkzeug import (
+    ExecutionLoop,
+    FuzzyCron,
+    Location,
+    SunAltitudeAbove,
+    schedule,
+)
 from zeitwerkzeug.integrations.weather import ClearWeather
 
 # Osaka, Japan
-LOCATION = Location(lat=34.6937, lon=135.5020, timezone="Asia/Tokyo")
+LOCATION = Location(
+    lat=34.6937,
+    lon=135.5020,
+    timezone="Asia/Tokyo",
+)
+
 MAX_CLOUD_COVER = 40
 
 
@@ -354,16 +658,15 @@ async def main():
     trigger = (
         schedule.at("sunrise", location=LOCATION)
         .require(
-            All(
-                (
-                    ClearWeather(
-                        lat=LOCATION.lat,
-                        lon=LOCATION.lon,
-                        max_cloud_cover=MAX_CLOUD_COVER,
-                    ),
-                    SunAltitudeAbove(LOCATION, min_altitude=-6.0),
-                )
-            )
+            ClearWeather(
+                lat=LOCATION.lat,
+                lon=LOCATION.lon,
+                max_cloud_cover=MAX_CLOUD_COVER,
+            ),
+            SunAltitudeAbove(
+                location=LOCATION,
+                min_altitude=-6.0,
+            ),
         )
         .on_fail(
             retry_interval=timedelta(minutes=15),
@@ -373,7 +676,11 @@ async def main():
     )
 
     cron = FuzzyCron()
-    cron.register(water_plants, trigger, name="garden-irrigation")
+    cron.register(
+        water_plants,
+        trigger,
+        name="garden-irrigation",
+    )
 
     loop = ExecutionLoop(
         registry=cron,
@@ -395,22 +702,26 @@ if __name__ == "__main__":
 
 ### Setup
 
+This project uses [Task](https://taskfile.dev).
+
 ```bash
-# Install Task (https://taskfile.dev)
 task install
 task lint
 task typecheck
 task test
 ```
 
-### Project Structure
+---
 
-```
+## Project structure
+
+```text
 src/zeitwerkzeug/
 ├── astro/          # Solar geometry engine
 ├── context/        # Scheduling primitives and conditions
 ├── daemon/         # Async execution loop and job registry
-├── integrations/   # Third‑party integrations (weather)
+├── integrations/   # Third-party integrations, such as weather
+├── persistence     # For persiatence with sqlite via aiosqlite
 ├── personas/       # Human rhythm profiles and parser
 ├── exceptions.py   # Central error hierarchy
 ├── interfaces.py   # Protocol definitions
@@ -421,7 +732,9 @@ src/zeitwerkzeug/
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
+MIT License.
+
+See [`LICENSE`](LICENSE) for details.
 
 ---
 
@@ -429,17 +742,15 @@ MIT License. See [LICENSE](LICENSE) for details.
 
 Contributions are welcome! Please:
 
-- Open an issue for bugs or feature requests
-- Follow the existing code style (ruff, mypy)
-- Include tests for new functionality
-- Update documentation as needed
+1. Open an issue for bugs or feature requests.
+2. Follow the existing code style, enforced by `ruff` and `mypy`.
+3. Include tests for new functionality.
+4. Update documentation as needed.
 
 ---
 
 ## Acknowledgments
 
-- Solar calculations inspired by NOAA and Meeus algorithms
-- Weather data provided by [Open‑Meteo](https://open-meteo.com/)
-- Built for Python 3.11+ with `asyncio` and modern type hints
-
----
+- Solar calculations are inspired by NOAA and Meeus algorithms.
+- Weather data is provided by [Open-Meteo](https://open-meteo.com/).
+- Built for Python 3.11+ with `asyncio` and modern type hints.

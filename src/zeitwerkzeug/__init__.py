@@ -1,5 +1,6 @@
 """Zeitwerkzeug public api"""
 
+import contextlib
 from logging import NullHandler, getLogger
 
 from . import exceptions
@@ -33,11 +34,11 @@ from .personas.profile import (
     TimeBlock,
 )
 
-__version__ = "0.0.3"
-
+__version__ = "0.0.4"
 getLogger("zeitwerkzeug").addHandler(NullHandler())
 
-__version__ = "0.0.3"
+with contextlib.suppress(ImportError):
+    from .persistence import JobRecord, PersistentExecutionLoop, PersistentFuzzyCron
 
 
 def __getattr__(name: str) -> object:
@@ -66,11 +67,14 @@ __all__ = [
     "ExecutionLoop",
     "FailPolicy",
     "FuzzyCron",
+    "JobRecord",
     "JobSpec",
     "LazySchedule",
     "Location",
     "NightShift",
     "Not",
+    "PersistentExecutionLoop",
+    "PersistentFuzzyCron",
     "PersonaParser",
     "PersonaProfile",
     "ScheduleBuilder",

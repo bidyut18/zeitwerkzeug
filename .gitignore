@@ -14,7 +14,7 @@ wheels/
 
 #editors 
 .vscode/**
-
+*.db
 *.code-workspace
 
 prototype/**
@@ -24,3 +24,4 @@ roadmap.md
 *.zip
 
 prototype
+

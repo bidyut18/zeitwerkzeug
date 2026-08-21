@@ -46,14 +46,14 @@ class ClearWeather:
             context.attempt,
         )
 
-        # 1. Enforce the hard cap before making the network call
         if self.limiter is not None:
             allowed = await self.limiter.check_and_acquire()
             if not allowed:
-                # We hit the safety margin. Fail the condition gracefully.
+                logger.warning(
+                    f"Unfortunately,Rate limit is over.currently- {self.limiter.max_per_hour}/hr",
+                )
                 return False
 
-        # 2. Make the HTTP call
         headers = {"User-Agent": "Zeitwerkzeug-Python-Library/0.0.1"}
         params: dict[str, bool | float | str] = {
             "latitude": self.lat,

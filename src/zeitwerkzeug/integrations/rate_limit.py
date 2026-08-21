@@ -42,7 +42,6 @@ class OpenMeteoRateLimiter:
         async with self._lock:
             now = time.monotonic()
 
-            # Slide the windows: remove timestamps older than their respective windows
             while self._minute_calls and now - self._minute_calls[0] >= 60.0:
                 self._minute_calls.popleft()
             while self._hour_calls and now - self._hour_calls[0] >= 3600.0:
@@ -50,7 +49,6 @@ class OpenMeteoRateLimiter:
             while self._day_calls and now - self._day_calls[0] >= 86400.0:
                 self._day_calls.popleft()
 
-            # Check against our strict safety caps
             if (
                 len(self._minute_calls) >= self.max_per_minute
                 or len(self._hour_calls) >= self.max_per_hour

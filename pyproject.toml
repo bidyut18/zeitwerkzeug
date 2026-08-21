@@ -1,13 +1,13 @@
 [project]
 name = "zeitwerkzeug"
-version = "0.0.3"
+version = "0.0.4"
 description = "Contextual time handling for Python: solar geometry, environmental conditions, human rhythms, and drifting schedules."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Bidyut Mahanta", email = "bidyutmahanta7768@outlook.com" }]
 
-dependencies = ["tzdata>=2024.1; sys_platform == 'win32'"]
+dependencies = ["aiosqlite>=0.22.1", "tzdata>=2024.1; sys_platform == 'win32'"]
 
 keywords = ["time", "scheduler", "timezone"]
 classifiers = [
