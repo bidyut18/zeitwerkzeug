@@ -30,7 +30,7 @@ We expect all contributors to adhere to the [Python Software Foundation Code of 
 2. Make your changes, following the **Development Setup** below.
 3. Write or update tests for your changes.
 4. Ensure all checks pass (lint, format, type, tests).
-5. Push your branch and open a pull request against `main`.
+5. Push your branch and open a pull request against `dev`.
 6. Provide a clear description of the changes and reference any related issues.
 
 ---
@@ -166,4 +166,4 @@ If you need help, feel free to open a [discussion](https://github.com/bidyut18/z
 
 ---
 
-**Thank you for contributing to Zeitwerkzeug! 🌱**
+**Thank you so much for contributing to Zeitwerkzeug! 🌱**
