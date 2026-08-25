@@ -231,7 +231,7 @@ class TestWrapJobAsync:
         assert history[0].status == "success"
 
     @pytest.mark.asyncio
-    async def test_async_cancellation_is_logged_as_timeout(self, tracing_store):
+    async def test_async_cancellation_is_logged_as_cancelled(self, tracing_store):
         rec = await register_meta(tracing_store, "cancel-task")
 
         started = asyncio.Event()
@@ -258,7 +258,7 @@ class TestWrapJobAsync:
         history = await tracing_store.get_history(job_name="cancel-task")
 
         assert len(history) == 1
-        assert history[0].status == "timeout"
+        assert history[0].status == "cancelled"
         assert history[0].finished_at is not None
 
 

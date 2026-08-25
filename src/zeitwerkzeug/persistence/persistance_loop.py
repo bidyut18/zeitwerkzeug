@@ -135,13 +135,16 @@ def _wrap_job(
             result = await func(ctx) if pass_context else await func()
 
         except asyncio.CancelledError as cancelled:
+            # Distinguish timeout (job_timeout) from shutdown/other cancellations
+            # by checking if the job was actually running long enough to hit timeout
+            # For now, we log as "cancelled" to avoid conflating with timeout
             try:
                 await asyncio.shield(
                     store.update_execution(
                         execution_id,
-                        status="timeout",
+                        status="cancelled",
                         finished_at=_now_utc(),
-                        error_message="Job cancelled (timeout or shutdown)",
+                        error_message="Job cancelled (shutdown or timeout)",
                     )
                 )
             except asyncio.CancelledError:
@@ -151,7 +154,7 @@ def _wrap_job(
                 )
             except Exception:
                 logger.exception(
-                    "Failed to persist cancellation/timeout for job %r",
+                    "Failed to persist cancellation for job %r",
                     name,
                 )
 

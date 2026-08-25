@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Self
 
 
 def _iso_utc(value: datetime | None) -> str | None:
@@ -24,13 +24,12 @@ def _parse_dt(value: str | None) -> datetime | None:
     if not value:
         return None
 
-    # SQLite CURRENT_TIMESTAMP uses a space separator.
-    # datetime.fromisoformat() is safer with "T".
+    # SQLite TIMESTAMP columns may store a space instead of 'T'.
     value = value.replace(" ", "T", 1)
 
     # Be tolerant of trailing Z.
     if value.endswith("Z"):
-        value = value[:-1] + "+00:00"
+        value = f"{value[:-1]}+00:00"
 
     return datetime.fromisoformat(value)
 
@@ -45,7 +44,7 @@ class ExecutionRecord:
     """
 
     job_name: str
-    status: str  # pending | running | success | failed | skipped | timeout
+    status: str
     attempt: int = 1
     triggered_at: datetime | None = None
     started_at: datetime | None = None
@@ -67,7 +66,7 @@ class ExecutionRecord:
         )
 
     @classmethod
-    def from_db_row(cls, row: Any) -> ExecutionRecord:
+    def from_db_row(cls, row: Any) -> Self:
         """Reconstruct from a ``sqlite3.Row``."""
         return cls(
             job_name=row["job_name"],
@@ -115,7 +114,7 @@ class JobRecord:
         )
 
     @classmethod
-    def from_db_row(cls, row: Any) -> JobRecord:
+    def from_db_row(cls, row: Any) -> Self:
         return cls(
             name=row["name"],
             module=row["module"],

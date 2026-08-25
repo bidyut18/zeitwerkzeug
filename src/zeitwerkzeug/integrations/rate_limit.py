@@ -28,11 +28,20 @@ class OpenMeteoRateLimiter:
         self.max_per_hour = max_per_hour
         self.max_per_day = max_per_day
 
-        self._minute_calls: deque[float] = deque()
-        self._hour_calls: deque[float] = deque()
-        self._day_calls: deque[float] = deque()
+        # (window, max_calls, period_seconds) triples defining each limit tier.
+        self._windows: list[tuple[deque[float], int, float]] = [
+            (deque(), max_per_minute, 60.0),
+            (deque(), max_per_hour, 3600.0),
+            (deque(), max_per_day, 86400.0),
+        ]
 
         self._lock = asyncio.Lock()
+
+    @staticmethod
+    def _prune(window: deque[float], now: float, period: float) -> None:
+        """Drop timestamps that have fallen outside the sliding window."""
+        while window and now - window[0] >= period:
+            window.popleft()
 
     async def check_and_acquire(self) -> bool:
         """
@@ -42,32 +51,22 @@ class OpenMeteoRateLimiter:
         async with self._lock:
             now = time.monotonic()
 
-            while self._minute_calls and now - self._minute_calls[0] >= 60.0:
-                self._minute_calls.popleft()
-            while self._hour_calls and now - self._hour_calls[0] >= 3600.0:
-                self._hour_calls.popleft()
-            while self._day_calls and now - self._day_calls[0] >= 86400.0:
-                self._day_calls.popleft()
+            for window, _, period in self._windows:
+                self._prune(window, now, period)
 
-            if (
-                len(self._minute_calls) >= self.max_per_minute
-                or len(self._hour_calls) >= self.max_per_hour
-                or len(self._day_calls) >= self.max_per_day
-            ):
+            if any(len(window) >= max_calls for window, max_calls, _ in self._windows):
+                counts = [len(window) for window, _, _ in self._windows]
                 logger.warning(
                     "Open-Meteo free-tier rate limit reached. "
                     "Counts: %d/min, %d/hr, %d/day. "
                     "Failing condition to prevent IP ban. "
                     "Consider upgrading to a commercial API key.",
-                    len(self._minute_calls),
-                    len(self._hour_calls),
-                    len(self._day_calls),
+                    *counts,
                 )
                 return False
 
-            self._minute_calls.append(now)
-            self._hour_calls.append(now)
-            self._day_calls.append(now)
+            for window, _, _ in self._windows:
+                window.append(now)
             return True
 
 

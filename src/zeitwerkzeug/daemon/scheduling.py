@@ -47,7 +47,6 @@ class SchedulingMixin:
         _generations = self._generations
         _last_refresh = self._last_refresh
 
-        # Set difference is faster than list() + conditional discard loop
         for job_id in _active - current_ids:
             _active.discard(job_id)
             _generations.pop(job_id, None)

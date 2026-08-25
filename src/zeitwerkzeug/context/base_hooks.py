@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass
 from datetime import time as clock_time
+from typing import Protocol
 from zoneinfo import ZoneInfo
 
 from zeitwerkzeug.astro.location import Location
@@ -12,11 +13,15 @@ from zeitwerkzeug.astro.math_engine import sun_altitude
 from zeitwerkzeug.interfaces import ExecutionContext
 
 
+class Condition(Protocol):
+    def evaluate(self, context: ExecutionContext) -> bool: ...
+
+
 @dataclass(frozen=True, slots=True)
 class AlwaysTrue:
     """Condition that always passes."""
 
-    def evaluate(self, context: ExecutionContext) -> bool:
+    def evaluate(self) -> bool:
         return True
 
 
@@ -59,7 +64,7 @@ class TimeWindow:
 class All:
     """Logical AND combinator."""
 
-    conditions: tuple[ConditionLike, ...]
+    conditions: tuple[Condition, ...]
 
     def evaluate(self, context: ExecutionContext) -> bool:
         return all(condition.evaluate(context) for condition in self.conditions)
@@ -69,7 +74,7 @@ class All:
 class Any:
     """Logical OR combinator."""
 
-    conditions: tuple[ConditionLike, ...]
+    conditions: tuple[Condition, ...]
 
     def evaluate(self, context: ExecutionContext) -> bool:
         return any(condition.evaluate(context) for condition in self.conditions)
@@ -79,7 +84,7 @@ class Any:
 class Not:
     """Logical NOT combinator."""
 
-    condition: ConditionLike
+    condition: Condition
 
     def evaluate(self, context: ExecutionContext) -> bool:
         return not self.condition.evaluate(context)

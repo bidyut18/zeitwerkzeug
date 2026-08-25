@@ -67,7 +67,7 @@ class FailPolicy:
         if isinstance(limit, clock_time):
             return _next_time_after(after_utc, limit, lazy.timezone_info)
 
-        if isinstance(limit, (SolarEvent, SolarAngle)):
+        if isinstance(limit, (SolarEvent | SolarAngle)):
             if lazy.location is None:
                 raise ScheduleError("Solar limits require a location on the schedule.")
 
@@ -134,7 +134,7 @@ class LazySchedule:
         after_utc = _as_utc(after, UTC)
         target = self.target
 
-        if isinstance(target, (SolarEvent, SolarAngle)):
+        if isinstance(target, (SolarEvent | SolarAngle)):
             if self.location is None:
                 raise ScheduleError("Solar schedules require a location.")
 

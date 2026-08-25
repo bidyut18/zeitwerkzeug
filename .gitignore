@@ -12,7 +12,7 @@ wheels/
 # Virtual environments
 .venv
 
-#editors 
+#editors
 .vscode/**
 *.db
 *.code-workspace
@@ -24,4 +24,3 @@ roadmap.md
 *.zip
 
 prototype
-

@@ -1,6 +1,6 @@
 [project]
 name = "zeitwerkzeug"
-version = "0.0.5"
+version = "0.0.6"
 description = "Contextual time handling for Python: solar geometry, environmental conditions, human rhythms, and drifting schedules."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -35,6 +35,7 @@ dev = [
     "hypothesis>=6.90.0",
     "mypy>=1.10",
     "ruff>=0.5",
+    "pre-commit>=4.6.2",
 ]
 
 [tool.setuptools.packages.find]
@@ -42,7 +43,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src", "."]   
+pythonpath = ["src", "."]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "--cov=zeitwerkzeug --cov-fail-under=75 --cov-report=term-missing"

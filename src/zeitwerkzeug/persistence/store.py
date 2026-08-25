@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 """
 
-_MIGRATION_1 = """
+_MIGRATION_ = """
 CREATE TABLE IF NOT EXISTS jobs (
     name          TEXT PRIMARY KEY,
     module        TEXT,
@@ -140,7 +140,7 @@ class SQLiteStore:
             current = 0
 
         if current < 1:
-            await self._db.executescript(_MIGRATION_1)
+            await self._db.executescript(_MIGRATION_)
             await self._meta_set("schema_version", "1")
             current = 1
 
@@ -270,7 +270,10 @@ class SQLiteStore:
             """,
             record.to_db_row(),
         ) as cur:
-            return cur.lastrowid  # type: ignore[return-value]
+            if cur.lastrowid is None:
+                logger.exception("Error occurred during Log execution")
+                raise ValueError("Error occurred during log execution")
+            return cur.lastrowid
 
     async def update_execution(
         self,
@@ -383,15 +386,14 @@ class SQLiteStore:
         """
         cutoff = _iso_utc(datetime.now(UTC) - older_than)
 
-        cur = await self._conn.execute(
+        async with self._conn.execute(
             """
             DELETE FROM executions
             WHERE COALESCE(triggered_at, started_at, finished_at) < ?
             """,
             (cutoff,),
-        )
-
-        return int(cur.rowcount or 0)
+        ) as cur:
+            return int(cur.rowcount or 0)
 
     async def vacuum(self) -> None:
         """Reclaim disk space after heavy pruning."""

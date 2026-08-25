@@ -29,12 +29,10 @@ class ClearWeather:
         self.limiter: OpenMeteoRateLimiter | None
 
         if api_key:
-            # Commercial endpoint has practically unlimited quotas
             self.endpoint = "https://customer-api.open-meteo.com/v1/forecast"
             self.api_key = api_key
             self.limiter = None
         else:
-            # Free endpoint requires strict rate limiting
             self.endpoint = "https://api.open-meteo.com/v1/forecast"
             self.api_key = None
             self.limiter = FREE_API_LIMITER

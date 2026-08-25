@@ -11,6 +11,7 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 
 from zeitwerkzeug.daemon.clock import SystemClock
+from zeitwerkzeug.daemon.constants import _SEMAPHORE_POLL_SECONDS
 from zeitwerkzeug.daemon.models import ExecutionRecord, JobSpec, QueueEntry
 from zeitwerkzeug.daemon.registry import FuzzyCron
 from zeitwerkzeug.exceptions import ConditionEvaluationError
@@ -38,8 +39,6 @@ class ExecutionMixin:
 
     async def _acquire_concurrency_slot(self) -> bool:
         """Acquire a concurrency slot while still respecting stop()."""
-        from zeitwerkzeug.daemon.constants import _SEMAPHORE_POLL_SECONDS
-
         semaphore = self._semaphore
         poll = _SEMAPHORE_POLL_SECONDS
 
@@ -84,13 +83,11 @@ class ExecutionMixin:
         if max_latency is not None:
             latency = now - scheduled_for
             if latency > max_latency:
-                finished_at = clock.now()
-
                 self._record(
                     job=job,
                     scheduled_for=scheduled_for,
                     started_at=now,
-                    finished_at=finished_at,
+                    finished_at=clock.now(),
                     attempt=attempt,
                     status="skipped",
                     error="missed_run",
@@ -166,7 +163,8 @@ class ExecutionMixin:
                 error=condition_error,
             )
 
-            self._schedule_retry(job, finished_at, attempt)
+            # Condition failures don't consume an attempt; schedule next occurrence
+            self._schedule_next(job, finished_at, 1, generation)
             return
 
         job_timeout = job.job_timeout if job.job_timeout is not None else self.default_job_timeout

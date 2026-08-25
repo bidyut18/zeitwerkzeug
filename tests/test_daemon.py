@@ -702,11 +702,12 @@ async def test_execute_condition_failed_schedules_retry(
     assert len(history) == 1
     assert history[0].status == "condition_failed"
 
-    # Verify a retry was actually scheduled in the queue
+    # Verify the next occurrence was scheduled (condition failures don't
+    # consume an attempt — attempt resets to 1)
     entries = execution_loop.queue_snapshot
     assert len(entries) == 1
     assert entries[0].job_id == job.id
-    assert entries[0].attempt == 2
+    assert entries[0].attempt == 1
 
 
 @pytest.mark.asyncio
