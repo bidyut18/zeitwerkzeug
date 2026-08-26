@@ -10,9 +10,9 @@ repos:
 
   - repo: local
     hooks:
-      - id: task-check
-        name: Run Check
-        entry: task check
+      - id: task-typecheck
+        name: Run Typecheck
+        entry: task typecheck
         language: system
         pass_filenames: false
         always_run: true

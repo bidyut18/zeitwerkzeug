@@ -7,8 +7,8 @@ copyright: >
 theme:
   name: material
   custom_dir: docs/overrides
-  logo: /images/logo.svg
-  favicon: /images/logo.svg
+  logo: images/logo.svg
+  favicon: images/logo.svg
   features:
     - navigation.tabs
     - navigation.sections
@@ -49,20 +49,8 @@ markdown_extensions:
       custom_fences:
         - name: mermaid
           class: mermaid
-          format:markdown_extensions:
-  - admonition
-  - pymdownx.details
-  - attr_list
-  - md_in_html
-  - pymdownx.tabbed:
-      alternate_style: true
-  - pymdownx.highlight:
-      anchor_linenums: true
-  - pymdownx.superfences:
-      custom_fences:
-        - name: mermaid
-          class: mermaid
-          format: "!!python/name:pymdownx.superfences.fence_code_format"
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
 plugins:
   - search
   - mkdocstrings:
@@ -71,7 +59,7 @@ plugins:
           paths: [src]
           options:
             show_source: true
-  # ← NO mermaid CDN line here
+
 nav:
   - Home: index.md
   - Getting started:

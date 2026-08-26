@@ -42,23 +42,25 @@
 
 /* ---------- Photo credit (bottom-right of hero) ---------- */
 .zw-hero__credit {
-  position: absolute;
-  right: 0.75rem;
-  bottom: 0.5rem;
-  z-index: 1;
-  font-size: 0.65rem;
-  letter-spacing: 0.02em;
-  color: rgba(255, 255, 255, 0.6);
-  text-decoration: none;
-}
-.zw-hero__credit:hover {
-  color: #fff;
-  text-decoration: underline;
+    position: absolute;
+    right: 0.75rem;
+    bottom: 0.5rem;
+    z-index: 1;
+    font-size: 0.65rem;
+    letter-spacing: 0.02em;
+    color: rgba(255, 255, 255, 0.6);
+    text-decoration: none;
 }
 
-.zw-hero_logo {
-  width: 120px;
-  height: auto;
-  margin-bottom: 1.5rem;
-  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.4));
+.zw-hero__credit:hover {
+    color: #fff;
+    text-decoration: underline;
+}
+
+
+.zw-hero__logo {
+    width: 120px;
+    height: auto;
+    margin-bottom: 1.5rem;
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.4));
 }
