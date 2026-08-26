@@ -1,0 +1,64 @@
+/* ---------- Parallax hero (like squidfunk.github.io) ---------- */
+.zw-hero {
+    position: relative;
+    min-height: 70vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-image: url("../images/home.jpg");
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    /* ← THIS is the parallax effect */
+}
+
+/* Dark veil so white text stays readable on any wallpaper */
+.zw-hero__overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(10, 20, 30, .45), rgba(10, 20, 30, .75));
+}
+
+.zw-hero__content {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    color: #fff;
+    padding: 2rem;
+}
+
+.zw-hero__content h1 {
+    color: #fff;
+    font-weight: 800;
+}
+
+/* iOS Safari doesn't support fixed backgrounds — fall back gracefully */
+@supports (-webkit-touch-callout: none) {
+    .zw-hero {
+        background-attachment: scroll;
+    }
+}
+
+
+/* ---------- Photo credit (bottom-right of hero) ---------- */
+.zw-hero__credit {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.5rem;
+  z-index: 1;
+  font-size: 0.65rem;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.6);
+  text-decoration: none;
+}
+.zw-hero__credit:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+.zw-hero_logo {
+  width: 120px;
+  height: auto;
+  margin-bottom: 1.5rem;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.4));
+}
