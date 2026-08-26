@@ -78,6 +78,16 @@ tasks:
     cmds:
       - uv build
 
+  docs:
+    desc: Serve documentation locally
+    cmds:
+      - uv run --group docs mkdocs serve
+
+  docs:build:
+    desc: Build documentation site
+    cmds:
+      - uv run --group docs mkdocs build
+
   publish:
     desc: Publish package to PyPI using uv (requires Trusted Publishing setup)
     cmds:

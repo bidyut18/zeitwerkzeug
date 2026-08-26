@@ -1,0 +1,92 @@
+site_name: Zeitwerkzeug
+site_description: Contextual Time & Adaptive Scheduling for Python
+repo_url: https://github.com/bidyut18/zeitwerkzeug
+copyright: >
+  &copy; 2026 Bidyut Mahanta · MIT
+
+theme:
+  name: material
+  custom_dir: docs/overrides
+  logo: /images/logo.svg
+  favicon: /images/logo.svg
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - search.suggest
+    - search.highlight
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue grey
+      accent: amber
+      toggle: { icon: material/weather-night, name: Switch to dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue grey
+      accent: amber
+      toggle: { icon: material/weather-sunny, name: Switch to light mode }
+
+extra_css:
+  - stylesheets/extra.css
+extra_javascript:
+  - javascripts/parallax.js
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format:markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: "!!python/name:pymdownx.superfences.fence_code_format"
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_source: true
+  # ← NO mermaid CDN line here
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+  - Concepts:
+      - Solar time: concepts/astro.md
+      - Conditions: concepts/context.md
+      - Personas: concepts/personas.md
+      - Persistence: concepts/persistence.md
+  - API Reference:
+      - Astro: api/astro.md
+      - Context: api/context.md
+      - Daemon: api/daemon.md
+      - Integrations: api/integrations.md
+      - Personas: api/personas.md
+      - Persistence: api/persistence.md
+      - Exceptions: api/exceptions.md

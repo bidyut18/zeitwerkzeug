@@ -34,7 +34,7 @@ from .personas.profile import (
     TimeBlock,
 )
 
-__version__ = "0.0.6"
+__version__ = "0.0.7"
 getLogger("zeitwerkzeug").addHandler(NullHandler())
 
 with contextlib.suppress(ImportError):

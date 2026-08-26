@@ -1,0 +1,44 @@
+name: Deploy Documentation
+
+on:
+
+  push:
+    branches: ["main"]
+
+  workflow_dispatch:
+
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install docs dependencies
+        run: uv sync --group docs
+
+      - name: Build documentation
+        env:
+          NO_MKDOCS_2_WARNING: "1"
+        run: uv run --group docs mkdocs build
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          # This keeps your gh-pages branch history clean
+          force_orphan: true
