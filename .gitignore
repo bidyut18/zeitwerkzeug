@@ -1,26 +1,40 @@
-# Python-generated files
+```
+# Compiled and build artifacts
+*.pyc
 __pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-.mypy_cache'/**
-*.egg-info
+
+# Dependencies
+.venv/
+venv/
+node_modules/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Environment
 .env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+
+# Test coverage
 .coverage
-.**cache/**
-# Virtual environments
-.venv
+coverage/
+htmlcov/
 
-#editors
-.vscode/**
-*.db
-*.code-workspace
-
-prototype/**
-
-# personal idea
-roadmap.md
-*.zip
-
-prototype
+# Python specific
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.pytest_cache/
+```
