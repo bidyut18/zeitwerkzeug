@@ -36,12 +36,9 @@ dev = [
     "mypy>=1.10",
     "ruff>=0.5",
     "pre-commit>=4.6.2",
+    "semgrep>=1.176.0",
 ]
-docs = [
-    "mkdocs-material",
-    "mkdocstrings[python]",
-
-]
+docs = ["mkdocs-material", "mkdocstrings[python]"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

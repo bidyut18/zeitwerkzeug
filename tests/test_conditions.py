@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -18,7 +18,6 @@ from zeitwerkzeug.context.base_hooks import (
     make_timeout,
 )
 from zeitwerkzeug.interfaces import ExecutionContext
-
 
 # ==============================================================================
 # Fixtures
@@ -147,9 +146,7 @@ class TestCachedCondition:
         cached.evaluate(sample_context)
         assert call_count == 2
 
-    def test_different_jobs_have_separate_caches(
-        self, sample_context: ExecutionContext
-    ) -> None:
+    def test_different_jobs_have_separate_caches(self, sample_context: ExecutionContext) -> None:
         """Test that different jobs have separate cache entries."""
         call_count = 0
 
@@ -225,9 +222,7 @@ class TestCachedCondition:
         assert result2 is True
         assert call_count == 1  # Should not increment
 
-    def test_cache_key_generation_consistency(
-        self, sample_context: ExecutionContext
-    ) -> None:
+    def test_cache_key_generation_consistency(self, sample_context: ExecutionContext) -> None:
         """Test that cache keys are generated consistently."""
         condition1 = AlwaysTrue()
         cached1 = CachedCondition(condition=condition1, ttl_seconds=60.0)
@@ -277,9 +272,7 @@ class TestTimeoutCondition:
                 return True
 
         original = SlowAsyncCondition()
-        wrapped = TimeoutCondition(
-            condition=original, timeout_seconds=0.1, on_timeout=False
-        )
+        wrapped = TimeoutCondition(condition=original, timeout_seconds=0.1, on_timeout=False)
 
         # Run in a new event loop to allow timeout
         loop = asyncio.new_event_loop()
@@ -306,9 +299,7 @@ class TestTimeoutCondition:
                 return False
 
         original = SlowAsyncCondition()
-        wrapped = TimeoutCondition(
-            condition=original, timeout_seconds=0.1, on_timeout=True
-        )
+        wrapped = TimeoutCondition(condition=original, timeout_seconds=0.1, on_timeout=True)
 
         loop = asyncio.new_event_loop()
         try:

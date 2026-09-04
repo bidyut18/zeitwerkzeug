@@ -10,7 +10,6 @@ from .astro.location import Location
 from .context.base_hooks import (
     All,
     AlwaysTrue,
-    Any,
     Not,
     SunAltitudeAbove,
     TimeWindow,
@@ -60,7 +59,6 @@ def __getattr__(name: str) -> object:
 __all__ = [
     "All",
     "AlwaysTrue",
-    "Any",
     "ClearWeather",
     "ConditionPlugin",
     "ExecutionContext",

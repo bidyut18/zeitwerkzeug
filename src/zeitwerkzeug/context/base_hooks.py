@@ -9,7 +9,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import time as clock_time
-from typing import Any, Protocol, TypeVar
+from typing import Any, ClassVar, Protocol, TypeVar, cast
 from zoneinfo import ZoneInfo
 
 from zeitwerkzeug.astro.location import Location
@@ -79,16 +79,6 @@ class All:
 
 
 @dataclass(frozen=True, slots=True)
-class Any:
-    """Logical OR combinator."""
-
-    conditions: tuple[Condition, ...]
-
-    def evaluate(self, context: ExecutionContext) -> bool:
-        return any(condition.evaluate(context) for condition in self.conditions)
-
-
-@dataclass(frozen=True, slots=True)
 class Not:
     """Logical NOT combinator."""
 
@@ -101,15 +91,17 @@ class Not:
 @dataclass(slots=True)
 class CachedCondition:
     """Wrap a condition to cache its result for a specified duration.
-    
+
     This is useful for expensive operations like API calls (weather, etc.).
     The cache key is derived from the condition's hash and the evaluation context.
     """
-    
+
     condition: Condition
     ttl_seconds: float = 300.0  # 5 minutes default
-    _cache: dict[str, tuple[float, bool]] = field(default_factory=dict, init=False, repr=False, compare=False)
-    
+    _cache: dict[str, tuple[float, bool]] = field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
+
     def _make_cache_key(self, context: ExecutionContext) -> str:
         """Create a deterministic cache key from context and condition."""
         key_data = {
@@ -119,33 +111,20 @@ class CachedCondition:
         }
         key_string = json.dumps(key_data, sort_keys=True, default=str)
         return hashlib.sha256(key_string.encode()).hexdigest()[:16]
-    
+
     def _is_expired(self, timestamp: float, now: datetime.datetime) -> bool:
         """Check if cached value has expired."""
         current_ts = now.timestamp()
         return (current_ts - timestamp) > self.ttl_seconds
-    
+
     def evaluate(self, context: ExecutionContext) -> bool:
         """Evaluate condition with caching."""
         import asyncio
-        
-        # Check if condition returns async result
-        result = self.condition.evaluate(context)
-        if asyncio.iscoroutine(result):
-            # For async conditions, we need async caching
-            coro = self._evaluate_async(context)
-            # Can't await here in sync method, so just evaluate directly
-            # This shouldn't happen in normal usage as evaluate is called from async context
-            loop = asyncio.new_event_loop()
-            try:
-                return loop.run_until_complete(coro)
-            finally:
-                loop.close()
-        
+
         cache_key = self._make_cache_key(context)
         now = context.triggered_at
-        
-        # Try to get cached value
+
+        # Try to get cached value FIRST (optimization to prevent needless evaluations)
         if cache_key in self._cache:
             cached_ts, cached_value = self._cache[cache_key]
             if not self._is_expired(cached_ts, now):
@@ -155,25 +134,42 @@ class CachedCondition:
                     context.job_name,
                 )
                 return cached_value
-        
-        # Evaluate and cache
+
+        # Check if condition returns async result
+        result = self.condition.evaluate(context)
+
+        if asyncio.iscoroutine(result):
+            # For async conditions, we need async caching
+            if hasattr(result, "close"):
+                result.close()  # Cleanup the unawaited coroutine generated above
+
+            coro = self._evaluate_async(context)
+            # Can't await here in sync method, so just evaluate directly
+            # This shouldn't happen in normal usage as evaluate is called from async context
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(coro)
+            finally:
+                loop.close()
+
+        # Evaluate and cache (sync path)
         value = bool(result)
         self._cache[cache_key] = (now.timestamp(), value)
-        
+
         logger.debug(
             "Cache miss, evaluated condition %s (job=%s, result=%s)",
             type(self.condition).__name__,
             context.job_name,
             value,
         )
-        
+
         return value
-    
+
     async def _evaluate_async(self, context: ExecutionContext) -> bool:
         """Async version of evaluate for async conditions."""
         cache_key = self._make_cache_key(context)
         now = context.triggered_at
-        
+
         # Try to get cached value
         if cache_key in self._cache:
             cached_ts, cached_value = self._cache[cache_key]
@@ -184,21 +180,21 @@ class CachedCondition:
                     context.job_name,
                 )
                 return cached_value
-        
-        # Evaluate and cache
-        result = await self.condition.evaluate(context)
+
+        # Evaluate and cache (Casted to fix Mypy type collision)
+        result = await cast(Awaitable[bool], self.condition.evaluate(context))
         value = bool(result)
         self._cache[cache_key] = (now.timestamp(), value)
-        
+
         logger.debug(
             "Cache miss, evaluated async condition %s (job=%s, result=%s)",
             type(self.condition).__name__,
             context.job_name,
             value,
         )
-        
+
         return value
-    
+
     def clear_cache(self) -> None:
         """Clear the cache manually."""
         self._cache.clear()
@@ -207,32 +203,34 @@ class CachedCondition:
 @dataclass(frozen=True, slots=True)
 class TimeoutCondition:
     """Wrap a condition to enforce a timeout during evaluation.
-    
+
     Prevents hanging conditions from blocking job execution.
     Returns False if the condition times out.
     """
-    
+
     condition: Condition
     timeout_seconds: float = 10.0
     on_timeout: bool = False  # Default to failing closed
-    
+
     def evaluate(self, context: ExecutionContext) -> bool:
         """Evaluate condition with timeout."""
         import asyncio
-        
+
         result = self.condition.evaluate(context)
-        
+
         # Check if it's async
         if asyncio.iscoroutine(result):
+            if hasattr(result, "close"):
+                result.close()
             return self._evaluate_async_with_timeout(context)
-        
+
         # Sync conditions don't need timeout (they should be fast)
         return bool(result)
-    
+
     def _evaluate_async_with_timeout(self, context: ExecutionContext) -> bool:
         """Evaluate async condition with timeout."""
         import asyncio
-        
+
         try:
             # Create event loop if needed
             try:
@@ -243,13 +241,13 @@ class TimeoutCondition:
                 asyncio.set_event_loop(loop)
                 result = loop.run_until_complete(
                     asyncio.wait_for(
-                        self.condition.evaluate(context),  # type: ignore
+                        cast(Awaitable[bool], self.condition.evaluate(context)),
                         timeout=self.timeout_seconds,
                     )
                 )
                 loop.close()
                 return bool(result)
-            
+
             # If we're in a running loop, we can't block
             # Return on_timeout value and log warning
             logger.warning(
@@ -260,8 +258,8 @@ class TimeoutCondition:
                 type(self.condition).__name__,
             )
             return self.on_timeout
-            
-        except asyncio.TimeoutError:
+
+        except TimeoutError:
             logger.warning(
                 "Condition %s timed out after %s seconds (job=%s)",
                 type(self.condition).__name__,
@@ -285,41 +283,43 @@ ConditionFactory = Callable[..., Condition]
 
 class ConditionRegistry:
     """Registry for custom condition factories.
-    
+
     Allows users to register and retrieve custom condition builders.
     Thread-safe for concurrent access.
     """
-    
-    _factories: dict[str, ConditionFactory] = {}
-    
+
+    _factories: ClassVar[dict[str, ConditionFactory]] = {}
+
     @classmethod
     def register(cls, name: str) -> Callable[[ConditionFactory], ConditionFactory]:
         """Decorator to register a condition factory.
-        
+
         Usage:
             @ConditionRegistry.register("my_condition")
             def my_condition_factory(param1: str, param2: int) -> Condition:
                 return MyCustomCondition(param1, param2)
         """
+
         def decorator(factory: ConditionFactory) -> ConditionFactory:
             cls._factories[name] = factory
             logger.info("Registered condition factory: %s", name)
             return factory
+
         return decorator
-    
+
     @classmethod
     def get_factory(cls, name: str) -> ConditionFactory | None:
         """Retrieve a registered condition factory by name."""
         return cls._factories.get(name)
-    
+
     @classmethod
     def create(cls, name: str, **kwargs: Any) -> Condition | None:
         """Create a condition using a registered factory.
-        
+
         Args:
             name: The registered factory name
             **kwargs: Arguments to pass to the factory
-            
+
         Returns:
             A new Condition instance, or None if factory not found
         """
@@ -332,15 +332,17 @@ class ConditionRegistry:
         except Exception as exc:
             logger.exception(
                 "Failed to create condition '%s' with args %s: %s",
-                name, kwargs, exc,
+                name,
+                kwargs,
+                exc,
             )
             return None
-    
+
     @classmethod
     def list_factories(cls) -> list[str]:
         """List all registered condition factory names."""
         return list(cls._factories.keys())
-    
+
     @classmethod
     def clear(cls) -> None:
         """Clear all registered factories (useful for testing)."""
@@ -365,4 +367,6 @@ def make_timeout(
     )
 
 
-ConditionLike = AlwaysTrue | SunAltitudeAbove | TimeWindow | All | Any | Not | CachedCondition | TimeoutCondition
+ConditionLike = (
+    AlwaysTrue | SunAltitudeAbove | TimeWindow | All | Not | CachedCondition | TimeoutCondition
+)

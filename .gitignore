@@ -1,4 +1,4 @@
-```
+
 # Compiled and build artifacts
 *.pyc
 __pycache__/
@@ -21,12 +21,13 @@ node_modules/
 # Editors
 .vscode/
 .idea/
-
+*.code-workspace
 # Test coverage
 .coverage
 coverage/
 htmlcov/
-
+# Secrets
+roadmap.md
 # Python specific
 *.pyo
 *.pyd
@@ -37,4 +38,3 @@ dist/
 build/
 .mypy_cache/
 .pytest_cache/
-```
